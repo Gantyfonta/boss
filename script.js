@@ -81,6 +81,7 @@ canvas.height = 400;
 // --- 1. SETTINGS & VARIABLES ---
 let mobileMode = localStorage.getItem('platformer_mobile') === 'true';
 let sfxEnabled = localStorage.getItem('platformer_sfx') !== 'false';
+let selectedWeapon = 'GUN';
 
 // --- CHANNEL SYSTEM ---
 let channelStates = {}; // Tracks activation state for lever/button channels
@@ -260,7 +261,7 @@ function createInfiniteBoss() {
     const hpScale = 1 + (defeatedBossesCount * 0.15);
     
     // Choose 3 random attacks from the available pool
-    const pool = ['BURST', 'TRIPLE_SHOT', 'WAVE', 'SINE', 'BOUNCE', 'WALL_STRIKE', 'CHARGE', 'BEAM_PREP', 'MINES', 'SPIRAL', 'SLAM_PREP', 'SUMMON', 'LAVA_PREP', 'PHASE_SHIFT', 'ORBITAL_STRIKE', 'GRAVITY_WELL', 'RING_SHOCK', 'CROSS_BEAM', 'STALACTITE'];
+    const pool = ['BURST', 'TRIPLE_SHOT', 'WAVE', 'SINE', 'BOUNCE', 'WALL_STRIKE', 'CHARGE', 'BEAM_PREP', 'MINES', 'SPIRAL', 'SLAM_PREP', 'SUMMON', 'LAVA_PREP', 'PHASE_SHIFT', 'ORBITAL_STRIKE', 'GRAVITY_WELL', 'RING_SHOCK', 'CROSS_BEAM', 'STALACTITE', 'SUMMON_MINION'];
     const chosenAttacks = [];
     const poolCopy = [...pool];
     for (let i = 0; i < 3; i++) {
@@ -288,6 +289,7 @@ function createInfiniteBoss() {
         projectiles: [],
         mines: [],
         seekers: [],
+        minions: [],
         beam: { active: false, x1: 0, y1: 0, x2: 0, y2: 0, width: 0, timer: 0 },
         lastSpiralTick: 0,
         hitResonance: 0,
@@ -623,6 +625,20 @@ window.showTitle = showTitle;
 window.postAnnouncement = postAnnouncement;
 window.clearAnnouncement = clearAnnouncement;
 window.adminLogin = adminLogin;
+window.selectWeapon = selectWeapon;
+
+function selectWeapon(type) {
+    selectedWeapon = type;
+    const gunBtn = document.getElementById('weapon-gun');
+    const swordBtn = document.getElementById('weapon-sword');
+    if (type === 'GUN') {
+        if (gunBtn) { gunBtn.style.border = '2px solid #00d2ff'; gunBtn.style.opacity = '1'; }
+        if (swordBtn) { swordBtn.style.border = 'none'; swordBtn.style.opacity = '0.5'; }
+    } else {
+        if (swordBtn) { swordBtn.style.border = '2px solid #00d2ff'; swordBtn.style.opacity = '1'; }
+        if (gunBtn) { gunBtn.style.border = 'none'; gunBtn.style.opacity = '0.5'; }
+    }
+}
 
 async function adminLogin() {
     const pass = prompt("Enter Admin Password (demo default: admin123):");
@@ -738,10 +754,22 @@ function initLevel() {
     player.drones = [];
     player.frostRounds = 0;
     player.reactiveArmor = 0;
+    player.weaponType = selectedWeapon;
+    player.isSwinging = false;
+    player.swingProgress = 0;
+    player.swingCooldown = 0;
+    player.swordAngle = 0;
+    player.swordLength = 70;
     playerMoveSpeed = 450;
+    if (player.weaponType === 'SWORD') {
+        player.damage = 25; // Base sword damage approx 2x bullet
+        PLAYER_FIRE_RATE = 0.4; // Slower "fire" rate for sword
+    } else {
+        player.damage = 10;
+        PLAYER_FIRE_RATE = 0.25;
+    }
     jumpForce = -750;
     PLAYER_BULLET_SPEED = 800;
-    PLAYER_FIRE_RATE = 0.25;
     
     rushIndex = 0;
     if (isInfiniteMode) {
@@ -880,12 +908,29 @@ function showUpgradeScreen() {
     const selection = shuffled.slice(0, 3);
     
     selection.forEach(up => {
+        let displayDesc = up.desc;
+        let displayTitle = up.title;
+        
+        if (player.weaponType === 'SWORD') {
+            if (up.id === 'FIRE_RATE') displayDesc = 'Swing speed +25%';
+            if (up.id === 'MULTISHOT') { displayTitle = 'Dual Edge'; displayDesc = 'Wider swing arc'; }
+            if (up.id === 'SPEED') { displayTitle = 'Long Reach'; displayDesc = 'Sword length +25%'; }
+            if (up.id === 'HOMING') { displayTitle = 'Lunge Core'; displayDesc = 'Lunge toward boss on swing'; }
+            if (up.id === 'SIZE') displayDesc = 'Sword width/impact +50%';
+            if (up.id === 'CHARGE_SHOT') { displayTitle = 'Fusion Blade'; displayDesc = 'Hold to charge heavy swing'; }
+            if (up.id === 'LONG_BARREL') displayDesc = 'Sword length +50%';
+            if (up.id === 'STEADY_AIM') displayDesc = 'Swing speed & Spd +20%';
+            if (up.id === 'QUICK_RELOAD') displayDesc = 'Swing speed +15%';
+            if (up.id === 'FROST_ROUNDS') displayDesc = 'Hits slow boss attacks';
+            if (up.id === 'SHARP_SHOOTER') { displayTitle = 'Executioner'; displayDesc = 'DMG +50% to distant bosses'; }
+        }
+
         const card = document.createElement('div');
         card.className = `upgrade-card ${up.rarity}`;
         card.innerHTML = `
             <div class="rarity">${up.rarity}</div>
-            <h3>${up.title}</h3>
-            <p>${up.desc}</p>
+            <h3>${displayTitle}</h3>
+            <p>${displayDesc}</p>
             <div class="rarity" style="opacity: 0.3">SELECT</div>
         `;
         card.onclick = () => {
@@ -993,6 +1038,18 @@ window.addEventListener('mouseup', (e) => {
 
 function shoot(bonusCharge = 0) {
     if (player.health <= 0) return;
+    
+    if (player.weaponType === 'SWORD') {
+        if (player.isSwinging) return;
+        player.isSwinging = true;
+        player.swingProgress = 0;
+        player.swingCooldown = PLAYER_FIRE_RATE;
+        player.currentSwingCharge = bonusCharge;
+        player.swingHasHit = false;
+        sfx.init();
+        return;
+    }
+
     let dx = mouseX - (player.x + player.width/2);
     let dy = mouseY - (player.y + player.height/2);
     
@@ -1163,6 +1220,9 @@ function update(timestamp) {
                 else if (b.state === 'RING_SHOCK') b.attackTimer = 1.5;
                 else if (b.state === 'CROSS_BEAM') b.attackTimer = 2.0;
                 else if (b.state === 'STALACTITE') b.attackTimer = 2.0;
+                else if (b.state === 'SUMMON_MINION') {
+                    b.attackTimer = 0.5;
+                }
                 else if (b.state === 'CHARGE') {
                     b.attackTimer = 1.0;
                     b.targetX = player.x;
@@ -1609,6 +1669,35 @@ function update(timestamp) {
     }
 
     updateBossEntity(boss);
+    
+    // Update Minions
+    if (boss && boss.minions) {
+        boss.minions = boss.minions.filter(m => {
+            updateBossEntity(m);
+            // Minion take damage check
+            player.bullets.forEach(p => {
+                const dx = (m.x + m.width/2) - p.x;
+                const dy = (m.y + m.height/2) - p.y;
+                if (Math.sqrt(dx*dx + dy*dy) < p.radius + m.width/2) {
+                    m.health--;
+                    m.hitResonance = 0.2;
+                    spawnParticles(m.x + m.width/2, m.y + m.height/2, m.color, 5);
+                    p.life = 0; // Destroy bullet
+                }
+            });
+            // Sword check for minions
+            if (player.weaponType === 'SWORD' && player.isSwinging && !m.swordHit) {
+                const dx = (m.x + m.width/2) - (player.x + player.width/2);
+                const dy = (m.y + m.height/2) - (player.y + player.height/2);
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < (player.swordLength || 70) + 20) {
+                    m.health = 0;
+                    spawnParticles(m.x + m.width/2, m.y + m.height/2, m.color, 10);
+                }
+            }
+            return m.health > 0;
+        });
+    }
 
     // Update Player Bullets
     player.bullets = player.bullets.filter(p => {
@@ -1778,6 +1867,69 @@ function update(timestamp) {
 
     if (player.invuln > 0) player.invuln -= dt;
     if (player.fireCooldown > 0) player.fireCooldown -= dt;
+
+    // Update Sword
+    if (player.weaponType === 'SWORD' && player.isSwinging) {
+        player.swingProgress += dt * (1.0 / (PLAYER_FIRE_RATE || 0.4));
+        if (player.swingProgress >= 1.0) {
+            player.isSwinging = false;
+            player.swingProgress = 0;
+        }
+
+        // Sword Collision
+        if (boss && boss.health > 0 && !player.swingHasHit) {
+            const dx = (boss.x + boss.width/2) - (player.x + player.width/2);
+            const dy = (boss.y + boss.height/2) - (player.y + player.height/2);
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            const reach = (player.swordLength || 70) * (player.multishot > 1 ? 1.2 : 1);
+            
+            if (dist < reach + boss.width/2) {
+                const targetAng = Math.atan2(dy, dx);
+                const mouseDx = mouseX - (player.x + player.width/2);
+                const mouseDy = mouseY - (player.y + player.height/2);
+                const mouseAng = Math.atan2(mouseDy, mouseDx);
+                let diff = Math.abs(targetAng - mouseAng);
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                diff = Math.abs(diff);
+
+                const cone = 1.2 + (player.multishot - 1) * 0.5;
+                if (diff < cone) {
+                    let dmg = player.damage * (1 + (player.currentSwingCharge || 0) * 2);
+                    if (player.sharpShooter && dist > 300) dmg *= 1.5;
+                    
+                    if (player.crit && Math.random() < player.crit) {
+                        dmg *= 3;
+                        spawnParticles(boss.x + boss.width/2, boss.y + boss.height/2, '#fff', 20);
+                    }
+
+                    bossTakeDamage(boss, dmg);
+                    player.swingHasHit = true;
+
+                    if (player.lifesteal && Math.random() < player.lifesteal) {
+                        if (player.health < player.maxHealth) {
+                            player.health++;
+                            updateHealthUI();
+                        }
+                    }
+
+                    if (player.frostRounds) {
+                        boss.slowTimer = Math.min(2.0, (boss.slowTimer || 0) + 0.4);
+                    }
+
+                    if (player.explosive) {
+                        explosions.push({ x: boss.x + boss.width/2, y: boss.y + boss.height/2, radius: 0, maxRadius: 100, life: 0.4, color: '#ff4757' });
+                        bossTakeDamage(boss, player.damage * 0.5);
+                        setShake(5, 0.1);
+                    }
+
+                    if (player.homing) {
+                        player.velX += Math.cos(targetAng) * 400;
+                        player.velY += Math.sin(targetAng) * 400;
+                    }
+                }
+            }
+        }
+    }
 
     // Berserker Logic
     let fireRateMod = 1.0;
@@ -2226,6 +2378,27 @@ function draw() {
         ctx.fill();
     });
 
+    // Draw Sword
+    if (player.weaponType === 'SWORD' && player.health > 0) {
+        const dx = mouseX - (player.x + player.width/2);
+        const dy = mouseY - (player.y + player.height/2);
+        const angle = Math.atan2(dy, dx);
+        ctx.save();
+        ctx.translate(player.x + player.width/2, player.y + player.height/2);
+        let sr = -0.6;
+        if (player.isSwinging) sr = -0.8 + (player.swingProgress * 1.6);
+        ctx.rotate(angle + sr + Math.PI/2);
+        const sl = (player.swordLength || 70) * (1 + player.swingProgress * 0.1) * (player.bulletSize/6);
+        const sw = 8 * (player.bulletSize/6);
+        ctx.fillStyle = '#fff';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = player.color;
+        ctx.fillRect(-sw/2, -sl, sw, sl);
+        ctx.fillStyle = '#444';
+        ctx.fillRect(-sw * 2, -10, sw * 4, 5);
+        ctx.restore();
+    }
+
     // Draw Drones
     if (player.drones) {
         player.drones.forEach(d => {
@@ -2315,6 +2488,22 @@ function draw() {
             ctx.fillStyle = b.color;
             ctx.fill();
             ctx.globalAlpha = 1.0;
+        }
+
+        // Minions
+        if (b.minions) {
+            b.minions.forEach(m => {
+                ctx.save();
+                ctx.translate(m.x - b.x - b.width/2 + m.width/2, m.y - b.y - b.height/2 + m.height/2);
+                const ms = 1 + Math.sin(gameTime * 8) * 0.1;
+                ctx.scale(ms, ms);
+                if (m.hitResonance > 0) ctx.fillStyle = '#fff';
+                else ctx.fillStyle = m.color;
+                ctx.fillRect(-m.width/2, -m.height/2, m.width, m.height);
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(-m.width/4, -m.height/4, m.width/2, m.height/2);
+                ctx.restore();
+            });
         }
 
         // Beam Attack
