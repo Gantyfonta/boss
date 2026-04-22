@@ -1,0 +1,51 @@
+{
+  "entities": {
+    "Score": {
+      "title": "Score",
+      "description": "A high score entry for a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "time": { "type": "number", "description": "Time in milliseconds" },
+        "formattedTime": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userName", "time", "createdAt"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "A global announcement message.",
+      "type": "object",
+      "properties": {
+        "message": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["message", "active", "createdAt"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "A user with administrative privileges.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" }
+      },
+      "required": ["email"]
+    }
+  },
+  "firestore": {
+    "/highscores/{scoreId}": {
+      "schema": "Score",
+      "description": "Collection of speedrun high scores"
+    },
+    "/announcements/{announcementId}": {
+      "schema": "Announcement",
+      "description": "Global announcements from the admin"
+    },
+    "/admins/{adminId}": {
+      "schema": "Admin",
+      "description": "Users with admin panel access"
+    }
+  }
+}

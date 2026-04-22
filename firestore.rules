@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && isEmailVerified() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == "nineteenp2@gmail.com"
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    // Highscores collection
+    match /highscores/{scoreId} {
+      allow list: if true;
+      allow get: if true;
+
+      allow create: if isSignedIn() 
+        && isValidId(scoreId)
+        && incoming().userId == request.auth.uid
+        && incoming().time is number && incoming().time > 0
+        && incoming().userName is string && incoming().userName.size() > 0 && incoming().userName.size() <= 20
+        && incoming().createdAt == request.time;
+      
+      allow update, delete: if isAdmin();
+    }
+
+    // Announcements collection
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Admins collection (read-only for self, write for existing admins)
+    match /admins/{adminId} {
+      allow read: if isSignedIn() && request.auth.uid == adminId;
+      allow write: if isAdmin();
+    }
+  }
+}

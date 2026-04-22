@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Untitled Platformer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="ui" style="display: none;">
+            <div class="ui-panel">
+                <div id="player-health-container">
+                    <div class="health-pip"></div>
+                    <div class="health-pip"></div>
+                    <div class="health-pip"></div>
+                    <div class="health-pip"></div>
+                    <div class="health-pip"></div>
+                    <div class="health-pip"></div>
+                    <div class="health-pip"></div>
+                    <div class="health-pip"></div>
+                    <div class="health-pip"></div>
+                    <div class="health-pip"></div>
+                </div>
+                <div id="rush-counter" style="color: rgba(255,255,255,0.4); font-size: 12px; font-weight: bold; font-variant-numeric: tabular-nums;">BOSS 1 OF 2</div>
+                <div id="timer-display">00:00.00</div>
+                <div style="width: 100px;"></div> 
+            </div>
+            <div id="boss-health-container">
+                <div id="boss-health-bar"></div>
+                <div id="boss-name" style="font-size: 10px; color: rgba(255,255,255,0.5); text-align: right; margin-top: 2px; text-transform: uppercase; letter-spacing: 1px;">ALPHA CORE</div>
+            </div>
+        </div>
+
+        <!-- Title Screen -->
+        <div id="title-screen" class="overlay">
+            <h1>CORE OVERLOAD</h1>
+            <p>The Final Encounter</p>
+            <div class="menu-buttons">
+                <button onclick="startGame()">Start Battle</button>
+                <button onclick="showControls()">Controls</button>
+                <button id="admin-panel-btn" onclick="showAdminPanel()" style="display: none; background: #3498db; box-shadow: 0 4px #2980b9;">Admin Panel</button>
+            </div>
+            <p id="admin-login-link" onclick="adminLogin()" style="font-size: 10px; opacity: 0.3; margin-top: 20px; cursor: pointer;">Admin Login</p>
+        </div>
+
+        <!-- Controls Screen -->
+        <div id="controls-screen" class="overlay" style="display: none;">
+            <h2>SETTINGS & CONTROLS</h2>
+            
+            <div class="settings-group" style="margin-bottom: 20px; text-align: left; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; width: 300px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span>Mobile Controls:</span>
+                    <button id="toggle-mobile" onclick="toggleMobileMode()" style="padding: 5px 15px; width: 80px;">OFF</button>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Sound Effects:</span>
+                    <button id="toggle-sfx" onclick="toggleSFX()" style="padding: 5px 15px; width: 80px;">ON</button>
+                </div>
+            </div>
+
+            <div id="controls-list" style="text-align: left; margin-bottom: 20px;">
+                <div class="control-item"><span>Move Left:</span> <button class="key-btn" id="key-left" onclick="remapKey('left')">ArrowLeft</button></div>
+                <div class="control-item"><span>Move Right:</span> <button class="key-btn" id="key-right" onclick="remapKey('right')">ArrowRight</button></div>
+                <div class="control-item"><span>Jump:</span> <button class="key-btn" id="key-jump" onclick="remapKey('jump')">Space</button></div>
+                <div class="control-item"><span>Shoot:</span> <button class="key-btn" id="key-interact" onclick="remapKey('interact')">E or Mouse</button></div>
+                <div class="control-item"><span>Reset:</span> <button class="key-btn" id="key-reset" onclick="remapKey('reset')">KeyR</button></div>
+                <div class="control-item"><span>Back to Menu:</span> <button class="key-btn">Esc</button></div>
+            </div>
+            <p style="font-size: 14px; opacity: 0.7; margin-bottom: 20px;">Click a button then press any key to remap.</p>
+            <button onclick="showTitle()">Back</button>
+        </div>
+
+        <!-- Win Screen -->
+        <div id="win-screen" class="overlay" style="display: none;">
+            <h2>VICTORY!</h2>
+            <p id="final-time-text" style="font-size: 24px; color: #2ed573;"></p>
+            <div style="margin-top: 20px;">
+                <p style="color: var(--text-secondary);">The core has been neutralized.</p>
+            </div>
+            <button onclick="resetRun()" style="margin-top: 20px; background: #555; box-shadow: 0 4px #333;">Back to Menu</button>
+        </div>
+
+        <!-- Upgrade Screen -->
+        <div id="upgrade-screen" class="overlay">
+            <p style="color: var(--accent-gold); letter-spacing: 4px; font-size: 10px;">PROTOCOL: EVOLUTION</p>
+            <h2>SYSTEM UPGRADE AVAILABLE</h2>
+            <div class="card-container" id="card-selection">
+                <!-- Cards injected by JS -->
+            </div>
+        </div>
+
+        <!-- NPC Interaction UI -->
+        <div id="interaction-prompt">TALK</div>
+        
+        <!-- UI Components -->
+        <div id="admin-panel" class="overlay" style="display: none;">
+            <h2>ADMIN PANEL</h2>
+            <div style="width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 15px;">
+                <textarea id="announcement-input" placeholder="Global announcement message..." rows="3" style="padding: 10px; border-radius: 5px; border: none; width: 100%; font-size: 16px;"></textarea>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="postAnnouncement()" style="flex: 1; padding: 10px;">Post/Update</button>
+                    <button onclick="clearAnnouncement()" style="flex: 1; padding: 10px; background: #ff4757; box-shadow: 0 4px #c0392b;">Clear All</button>
+                </div>
+                <hr style="width: 100%; border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 10px 0;">
+                <h3>Manage Scores</h3>
+                <div id="admin-highscore-list" style="max-height: 200px; overflow-y: auto; width: 100%; font-size: 14px;">
+                    <p>Loading scores...</p>
+                </div>
+            </div>
+            <button onclick="showTitle()" style="margin-top: 30px; background: #555; box-shadow: 0 4px #333;">Back</button>
+        </div>
+
+        <!-- Touch Controls -->
+        <div id="touch-controls" style="display: none;">
+            <div class="touch-group left-group">
+                <button id="touch-left" class="touch-btn">←</button>
+                <button id="touch-right" class="touch-btn">→</button>
+            </div>
+            <div class="touch-group right-group">
+                <button id="touch-interact" class="touch-btn">SHOOT</button>
+                <button id="touch-jump" class="touch-btn">JUMP</button>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="script.js"></script>
+</body>
+</html>
