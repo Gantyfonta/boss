@@ -260,7 +260,7 @@ function createInfiniteBoss() {
     const hpScale = 1 + (defeatedBossesCount * 0.15);
     
     // Choose 3 random attacks from the available pool
-    const pool = ['BURST', 'TRIPLE_SHOT', 'WAVE', 'SINE', 'BOUNCE', 'WALL_STRIKE', 'CHARGE', 'BEAM_PREP', 'MINES', 'SPIRAL', 'SLAM_PREP', 'SUMMON', 'LAVA_PREP', 'PHASE_SHIFT', 'ORBITAL_STRIKE', 'GRAVITY_WELL'];
+    const pool = ['BURST', 'TRIPLE_SHOT', 'WAVE', 'SINE', 'BOUNCE', 'WALL_STRIKE', 'CHARGE', 'BEAM_PREP', 'MINES', 'SPIRAL', 'SLAM_PREP', 'SUMMON', 'LAVA_PREP', 'PHASE_SHIFT', 'ORBITAL_STRIKE', 'GRAVITY_WELL', 'RING_SHOCK', 'CROSS_BEAM', 'STALACTITE'];
     const chosenAttacks = [];
     const poolCopy = [...pool];
     for (let i = 0; i < 3; i++) {
@@ -291,6 +291,7 @@ function createInfiniteBoss() {
         beam: { active: false, x1: 0, y1: 0, x2: 0, y2: 0, width: 0, timer: 0 },
         lastSpiralTick: 0,
         hitResonance: 0,
+        slowTimer: 0,
         phases: [{ threshold: 1.0, attacks: chosenAttacks }] // Infinite bosses use all attacks from start
     };
 }
@@ -732,6 +733,11 @@ function initLevel() {
     player.chargeSpeed = 1.0;
     player.explosive = 0;
     player.splitting = 0;
+    player.berserker = 0;
+    player.lastStandUsed = false;
+    player.drones = [];
+    player.frostRounds = 0;
+    player.reactiveArmor = 0;
     playerMoveSpeed = 450;
     jumpForce = -750;
     PLAYER_BULLET_SPEED = 800;
@@ -784,6 +790,14 @@ function updateHealthUI() {
 
 function playerTakeDamage() {
     if (player.invuln > 0 || player.health <= 0 || gameState !== 'PLAYING') return;
+
+    if (player.lastStandUsed === false && player.health === 1) {
+        player.invuln = 4.0;
+        player.lastStandUsed = true;
+        setShake(20, 0.5);
+        sfx.portal();
+        return;
+    }
     
     if (player.armor && Math.random() < player.armor) {
         spawnParticles(player.x + player.width/2, player.y + player.height/2, '#00d2ff', 5);
@@ -800,6 +814,21 @@ function playerTakeDamage() {
     
     if (player.health <= 0) {
         setTimeout(() => resetRun(false), 800);
+    }
+
+    if (player.reactiveArmor) {
+        for (let i = 0; i < 12; i++) {
+            const ang = (i / 12) * Math.PI * 2;
+            player.bullets.push({
+                x: player.x + player.width/2,
+                y: player.y + player.height/2,
+                vx: Math.cos(ang) * 600,
+                vy: Math.sin(ang) * 600,
+                radius: 6,
+                life: 1.5,
+                damageScale: 0.8
+            });
+        }
     }
 }
 
@@ -829,7 +858,14 @@ const UPGRADES = [
     { id: 'SOLAR_PANEL', title: 'Solar Core', desc: 'Charge shots faster', rarity: 'RARE', run: () => player.chargeSpeed *= 1.5 },
     { id: 'HULL_HARDER', title: 'Hardened Hull', desc: 'Max Health +4', rarity: 'RARE', run: () => { player.maxHealth += 4; player.health += 4; updateHealthUI(); } },
     { id: 'EXPLOSIVE', title: 'Nitro Core', desc: 'Bullets explode on hit', rarity: 'EPIC', run: () => player.explosive = (player.explosive || 0) + 1 },
-    { id: 'SPLIT_SHOT', title: 'Fission Shell', desc: 'Bullets split on hit', rarity: 'EPIC', run: () => player.splitting = (player.splitting || 0) + 1 }
+    { id: 'SPLIT_SHOT', title: 'Fission Shell', desc: 'Bullets split on hit', rarity: 'EPIC', run: () => player.splitting = (player.splitting || 0) + 1 },
+    { id: 'BERSERKER', title: 'Berserker Engine', desc: 'Fire rate up as HP drops', rarity: 'RARE', run: () => player.berserker = 1 },
+    { id: 'DRONE_PILOT', title: 'Drone Mk1', desc: 'Summons a tactical drone', rarity: 'EPIC', run: () => player.drones.push({ angle: Math.random() * Math.PI * 2, fireCooldown: 0 }) },
+    { id: 'FROST_ROUNDS', title: 'Cryo Core', desc: 'Bullets slow boss attacks', rarity: 'RARE', run: () => player.frostRounds += 0.5 },
+    { id: 'REACTIVE_ARMOR', title: 'Reactive Core', desc: 'Release nova when hit', rarity: 'RARE', run: () => player.reactiveArmor++ },
+    { id: 'LAST_STAND', title: 'Final Protocol', desc: 'Invuln on fatal hit (1/run)', rarity: 'LEGENDARY', run: () => player.lastStandUsed = false },
+    { id: 'TITAN_PLATE', title: 'Titan Plate', desc: 'Max HP +5, move speed -20%', rarity: 'RARE', run: () => { player.maxHealth += 5; player.health += 5; playerMoveSpeed *= 0.8; updateHealthUI(); } },
+    { id: 'SHARP_SHOOTER', title: 'Sharp Shooter', desc: 'DMG +50% at long range', rarity: 'RARE', run: () => player.sharpShooter = true }
 ];
 
 function showUpgradeScreen() {
@@ -896,6 +932,10 @@ function bossTakeDamage(target, amount = player.damage) {
     setShake(10, 0.2);
     spawnParticles(target.x + target.width/2, target.y + target.height/2, target.color, 20);
     updateHealthUI();
+
+    if (player.frostRounds) {
+        target.slowTimer = Math.min(2.0, (target.slowTimer || 0) + 0.2);
+    }
     
     const phases = target.phases;
     const healthRatio = target.health / target.maxHealth;
@@ -1096,15 +1136,19 @@ function update(timestamp) {
     function updateBossEntity(b) {
         if (!b) return;
         if (b.hitResonance > 0) b.hitResonance -= dt;
+        if (b.slowTimer > 0) b.slowTimer -= dt;
+
+        let effectiveDt = dt;
+        if (b.slowTimer > 0) effectiveDt *= 0.6;
 
         if (b.state === 'IDLE') {
-            b.attackTimer -= dt;
+            b.attackTimer -= effectiveDt;
             // Float movement
             b.targetY = 150 + Math.sin(gameTime * 0.8) * 40;
             const spawnX = b.spawnX;
             b.targetX = spawnX + Math.cos(gameTime * 0.5) * 80;
-            b.x += (b.targetX - b.x) * dt * 2;
-            b.y += (b.targetY - b.y) * dt * 2;
+            b.x += (b.targetX - b.x) * effectiveDt * 2;
+            b.y += (b.targetY - b.y) * effectiveDt * 2;
 
             if (b.attackTimer <= 0) {
                 const pool = b.phases[b.phase].attacks;
@@ -1116,6 +1160,9 @@ function update(timestamp) {
                 else if (b.state === 'SINE') b.attackTimer = 2.0;
                 else if (b.state === 'BOUNCE') b.attackTimer = 1.8;
                 else if (b.state === 'WALL_STRIKE') b.attackTimer = 1.0;
+                else if (b.state === 'RING_SHOCK') b.attackTimer = 1.5;
+                else if (b.state === 'CROSS_BEAM') b.attackTimer = 2.0;
+                else if (b.state === 'STALACTITE') b.attackTimer = 2.0;
                 else if (b.state === 'CHARGE') {
                     b.attackTimer = 1.0;
                     b.targetX = player.x;
@@ -1148,6 +1195,43 @@ function update(timestamp) {
                     b.attackTimer = 2.0;
                 }
             }
+        } else if (b.state === 'RING_SHOCK') {
+            b.attackTimer -= effectiveDt;
+            if (Math.floor(b.attackTimer * 10) % 3 === 0 && b.attackTimer > 0) {
+                for (let i = 0; i < 16; i++) {
+                    const ang = (i / 16) * Math.PI * 2 + (b.attackTimer * 2);
+                    b.projectiles.push({
+                        x: b.x + b.width/2, y: b.y + b.height/2,
+                        vx: Math.cos(ang) * 400, vy: Math.sin(ang) * 400,
+                        radius: 8, life: 3, type: 'NORMAL'
+                    });
+                }
+            }
+            if (b.attackTimer <= 0) { b.state = 'IDLE'; b.attackTimer = 1.5; }
+        } else if (b.state === 'CROSS_BEAM') {
+            b.attackTimer -= effectiveDt;
+            if (b.attackTimer > 0.5 && b.attackTimer < 1.8) {
+                b.crossX = player.x + player.width/2;
+                b.crossY = player.y + player.height/2;
+            }
+            if (b.attackTimer <= 0.5 && b.attackTimer > 0) {
+                const px = player.x + player.width/2;
+                const py = player.y + player.height/2;
+                if (Math.abs(px - b.crossX) < 20 || Math.abs(py - b.crossY) < 20) {
+                    playerTakeDamage();
+                }
+            }
+            if (b.attackTimer <= 0) { b.state = 'IDLE'; b.attackTimer = 2.0; }
+        } else if (b.state === 'STALACTITE') {
+            b.attackTimer -= effectiveDt;
+            if (Math.floor(b.attackTimer * 10) % 2 === 0 && b.attackTimer > 0) {
+                b.projectiles.push({
+                    x: Math.random() * canvas.width, y: 0,
+                    vx: (Math.random() - 0.5) * 100, vy: 800,
+                    radius: 12, life: 2, type: 'LARGE'
+                });
+            }
+            if (b.attackTimer <= 0) { b.state = 'IDLE'; b.attackTimer = 1.5; }
         } else if (b.state === 'ORBITAL_STRIKE') {
             b.attackTimer -= dt;
             if (b.attackTimer <= 1.2 && Math.floor(b.attackTimer * 10) % 2 === 0) {
@@ -1563,8 +1647,14 @@ function update(timestamp) {
         if (boss && boss.health > 0 && boss.state !== 'DYING') {
             const dx = (boss.x + boss.width/2) - p.x;
             const dy = (boss.y + boss.height/2) - p.y;
-            if (Math.sqrt(dx*dx + dy*dy) < p.radius + boss.width/2) {
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist < p.radius + boss.width/2) {
                 let dmg = player.damage * (p.damageScale || 1);
+                
+                if (player.sharpShooter) {
+                    if (dist > 300) dmg *= 1.5;
+                }
+
                 if (player.crit && Math.random() < player.crit) {
                     dmg *= 3;
                     spawnParticles(p.x, p.y, '#fff', 20);
@@ -1689,6 +1779,34 @@ function update(timestamp) {
     if (player.invuln > 0) player.invuln -= dt;
     if (player.fireCooldown > 0) player.fireCooldown -= dt;
 
+    // Berserker Logic
+    let fireRateMod = 1.0;
+    if (player.berserker) {
+        fireRateMod = 0.5 + (player.health / player.maxHealth) * 0.5;
+    }
+
+    // Drone Update
+    if (player.drones && player.drones.length > 0) {
+        player.drones.forEach(d => {
+            d.angle += dt * 2;
+            d.x = player.x + player.width/2 + Math.cos(d.angle) * 60;
+            d.y = player.y + player.height/2 + Math.sin(d.angle) * 60;
+            d.fireCooldown -= dt;
+            if (d.fireCooldown <= 0 && boss && boss.health > 0) {
+                const dx = (boss.x + boss.width/2) - d.x;
+                const dy = (boss.y + boss.height/2) - d.y;
+                const ang = Math.atan2(dy, dx);
+                player.bullets.push({
+                    x: d.x, y: d.y,
+                    vx: Math.cos(ang) * PLAYER_BULLET_SPEED,
+                    vy: Math.sin(ang) * PLAYER_BULLET_SPEED,
+                    radius: 4, life: 2, damageScale: 0.3
+                });
+                d.fireCooldown = 0.5;
+            }
+        });
+    }
+
     const isFiring = (touchKeys.interact || isMouseDown || isShootKeyDown) && gameState === 'PLAYING' && !dialogueActive;
 
     if (player.hasChargeShot) {
@@ -1704,6 +1822,7 @@ function update(timestamp) {
         }
     } else if (isFiring && player.fireCooldown <= 0 && gameState === 'PLAYING' && !dialogueActive) {
         shoot();
+        player.fireCooldown = PLAYER_FIRE_RATE * fireRateMod;
     }
 
     // --- 2. TIMER ---
@@ -2107,6 +2226,19 @@ function draw() {
         ctx.fill();
     });
 
+    // Draw Drones
+    if (player.drones) {
+        player.drones.forEach(d => {
+            ctx.fillStyle = '#2ed573';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#2ed573';
+            ctx.fillRect(d.x - 4, d.y - 4, 8, 8);
+            // Engine glow
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(d.x - 2, d.y - 2, 4, 4);
+        });
+    }
+
     // Draw Bosses
     function drawBossEntity(b) {
         if (b.health <= 0 && b.state !== 'DYING') return;
@@ -2132,6 +2264,45 @@ function draw() {
             }
             ctx.stroke();
             ctx.setLineDash([]);
+        }
+
+        if (b.state === 'CROSS_BEAM') {
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([10, 5]);
+            // Horizontal line
+            ctx.beginPath();
+            ctx.moveTo(-b.x - b.width/2, b.crossY - (b.y + b.height/2));
+            ctx.lineTo(canvas.width, b.crossY - (b.y + b.height/2));
+            ctx.stroke();
+            // Vertical line
+            ctx.beginPath();
+            ctx.moveTo(b.crossX - (b.x + b.width/2), -b.y - b.height/2);
+            ctx.lineTo(b.crossX - (b.x + b.width/2), canvas.height);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            if (b.attackTimer <= 0.5 && b.attackTimer > 0) {
+                ctx.lineWidth = 40 * (b.attackTimer / 0.5);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.beginPath();
+                ctx.moveTo(-b.x - b.width/2, b.crossY - (b.y + b.height/2));
+                ctx.lineTo(canvas.width, b.crossY - (b.y + b.height/2));
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(b.crossX - (b.x + b.width/2), -b.y - b.height/2);
+                ctx.lineTo(b.crossX - (b.x + b.width/2), canvas.height);
+                ctx.stroke();
+            }
+        }
+
+        if (b.state === 'STALACTITE' && b.attackTimer > 0) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.fillRect(-b.x - b.width/2, -b.y - b.height/2, canvas.width, 10);
+            if (Math.floor(gameTime * 10) % 2 === 0) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.fillRect(-b.x - b.width/2, -b.y - b.height/2, canvas.width, 4);
+            }
         }
 
         if (b.state === 'GRAVITY_WELL') {
