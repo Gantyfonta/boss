@@ -24,6 +24,7 @@
                     <div class="health-pip"></div>
                 </div>
                 <div id="rush-counter" style="color: rgba(255,255,255,0.4); font-size: 12px; font-weight: bold; font-variant-numeric: tabular-nums;">BOSS 1 OF 2</div>
+                <div id="infinite-counter" style="display: none; color: #ffa502; font-size: 12px; font-weight: bold; font-variant-numeric: tabular-nums;">DEFEATED: 0</div>
                 <div id="timer-display">00:00.00</div>
                 <div style="width: 100px;"></div> 
             </div>
@@ -39,6 +40,7 @@
             <p>The Final Encounter</p>
             <div class="menu-buttons">
                 <button onclick="startGame()">Start Battle</button>
+                <button onclick="startInfiniteMode()" style="background: #e67e22; box-shadow: 0 4px #d35400;">Infinite Mode</button>
                 <button onclick="showControls()">Controls</button>
                 <button id="admin-panel-btn" onclick="showAdminPanel()" style="display: none; background: #3498db; box-shadow: 0 4px #2980b9;">Admin Panel</button>
             </div>
