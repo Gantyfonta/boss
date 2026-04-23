@@ -26,12 +26,23 @@
                 <div id="rush-counter" style="color: rgba(255,255,255,0.4); font-size: 12px; font-weight: bold; font-variant-numeric: tabular-nums;">BOSS 1 OF 2</div>
                 <div id="infinite-counter" style="display: none; color: #ffa502; font-size: 12px; font-weight: bold; font-variant-numeric: tabular-nums;">DEFEATED: 0</div>
                 <div id="timer-display">00:00.00</div>
-                <div style="width: 100px;"></div> 
+                <div style="width: 100px; text-align: right;">
+                    <button onclick="toggleInventory()" style="padding: 4px 8px; font-size: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: white; cursor: pointer;">INVENTORY [TAB]</button>
+                </div> 
             </div>
             <div id="boss-health-container">
                 <div id="boss-health-bar"></div>
                 <div id="boss-name" style="font-size: 10px; color: rgba(255,255,255,0.5); text-align: right; margin-top: 2px; text-transform: uppercase; letter-spacing: 1px;">ALPHA CORE</div>
             </div>
+        </div>
+
+        <!-- Inventory Menu -->
+        <div id="inventory-screen" class="overlay" style="display: none; background: rgba(10, 10, 10, 0.8);">
+            <h2>CURRENT UPGRADES</h2>
+            <div id="inventory-list" style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; max-width: 800px; max-height: 400px; overflow-y: auto;">
+                <!-- Filled by JS -->
+            </div>
+            <button onclick="toggleInventory()" style="margin-top: 20px; background: #555; box-shadow: 0 4px #333;">Close</button>
         </div>
 
         <!-- Title Screen -->

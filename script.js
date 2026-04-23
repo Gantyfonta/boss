@@ -578,6 +578,8 @@ function resetRun(backToMenu = true) {
         if (sandboxScreen) sandboxScreen.style.display = 'none';
         const adminPanel = document.getElementById('admin-panel');
         if (adminPanel) adminPanel.style.display = 'none';
+        const inventoryScreen = document.getElementById('inventory-screen');
+        if (inventoryScreen) inventoryScreen.style.display = 'none';
     } else {
         startGame();
     }
@@ -638,7 +640,56 @@ window.showTitle = showTitle;
 window.postAnnouncement = postAnnouncement;
 window.clearAnnouncement = clearAnnouncement;
 window.adminLogin = adminLogin;
-window.selectWeapon = selectWeapon;
+window.toggleInventory = toggleInventory;
+
+function toggleInventory() {
+    const inv = document.getElementById('inventory-screen');
+    if (inv.style.display === 'flex') {
+        inv.style.display = 'none';
+        if (gameState === 'PAUSED_INVENTORY') {
+            gameState = 'PLAYING';
+        }
+        return;
+    }
+    
+    // Open inventory
+    if (gameState === 'PLAYING') {
+        gameState = 'PAUSED_INVENTORY';
+    }
+    inv.style.display = 'flex';
+    
+    const list = document.getElementById('inventory-list');
+    list.innerHTML = '';
+    
+    let hasItems = false;
+    // Iterate keys
+    Object.keys(player.upgrades || {}).forEach(id => {
+        const count = player.upgrades[id];
+        if (count > 0) {
+            hasItems = true;
+            const up = UPGRADES.find(u => u.id === id);
+            if (up) {
+                const el = document.createElement('div');
+                el.className = `upgrade-card ${up.rarity}`;
+                el.style.transform = 'none';
+                el.style.cursor = 'default';
+                el.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <div class="rarity">${up.rarity}</div>
+                        <div style="font-size: 14px; font-weight: bold; background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 4px;">x${count}</div>
+                    </div>
+                    <h3 style="font-size: 14px; margin-top: 5px;">${up.title}</h3>
+                    <p style="font-size: 10px;">${up.desc}</p>
+                `;
+                list.appendChild(el);
+            }
+        }
+    });
+
+    if (!hasItems) {
+        list.innerHTML = '<p style="color: rgba(255,255,255,0.5);">No upgrades collected yet.</p>';
+    }
+}
 
 // Attach new Sandbox & Index flows so they work from HTML
 if (typeof showIndex !== 'undefined') window.showIndex = showIndex;
@@ -778,6 +829,9 @@ function initLevel() {
     player.swingCooldown = 0;
     player.swordAngle = 0;
     player.swordLength = 70;
+    player.whirlwind = false;
+    player.throwingSword = false;
+    player.upgrades = {};
     playerMoveSpeed = 450;
     if (player.weaponType === 'SWORD') {
         player.damage = 25; // Base sword damage approx 2x bullet
@@ -933,6 +987,7 @@ const UPGRADES = [
     { id: 'SNIPER_ROUND', title: 'Sniper Core', desc: 'Pierce +1, Spd +50%, DMG +10', rarity: 'EPIC', run: () => { player.pierce = (player.pierce || 0) + 1; PLAYER_BULLET_SPEED *= 1.5; player.damage += 10; } },
     { id: 'SCATTERGUN', title: 'Scatter Core', desc: '+3 Projectiles, -40% DMG', rarity: 'EPIC', run: () => { player.multishot += 3; player.damage = Math.max(1, player.damage * 0.6); } },
     { id: 'WHIRLWIND', title: 'Whirlwind', desc: 'Attacks hit all around you', rarity: 'LEGENDARY', run: () => { player.whirlwind = true; } },
+    { id: 'THROWING_SWORD', title: 'Spectral Blade', desc: 'Throw swords like bullets. Enables Gun cards!', rarity: 'LEGENDARY', run: () => { player.throwingSword = true; } },
     { id: 'VAMPIRIC_STRIKE', title: 'Vampiric Edge', desc: 'High lifesteal, Max HP -2', rarity: 'EPIC', run: () => { player.lifesteal = (player.lifesteal || 0) + 0.1; player.maxHealth = Math.max(1, player.maxHealth - 2); player.health = Math.min(player.health, player.maxHealth); updateHealthUI(); } }
 ];
 
@@ -951,7 +1006,7 @@ function showUpgradeScreen() {
         let displayDesc = up.desc;
         let displayTitle = up.title;
         
-        if (player.weaponType === 'SWORD') {
+        if (player.weaponType === 'SWORD' && !player.throwingSword) {
             if (up.id === 'FIRE_RATE') displayDesc = 'Swing speed +25%';
             if (up.id === 'MULTISHOT') { displayTitle = 'Dual Edge'; displayDesc = 'Wider swing arc'; }
             if (up.id === 'SPEED') { displayTitle = 'Long Reach'; displayDesc = 'Sword length +25%'; }
@@ -975,6 +1030,9 @@ function showUpgradeScreen() {
         `;
         card.onclick = () => {
             up.run();
+            // Track for inventory
+            player.upgrades[up.id] = (player.upgrades[up.id] || 0) + 1;
+            
             // Track in collection index
             const collected = JSON.parse(localStorage.getItem('collectedUpgrades') || '[]');
             if (!collected.includes(up.id)) {
@@ -1083,6 +1141,7 @@ window.startSandboxRun = function() {
             if (up) {
                 for (let i = 0; i < count; i++) {
                     up.run();
+                    player.upgrades[up.id] = (player.upgrades[up.id] || 0) + 1;
                 }
             }
         }
@@ -1115,7 +1174,7 @@ function spawnNextBoss() {
 }
 
 function bossTakeDamage(target, amount = player.damage) {
-    if (target.state === 'DYING' || target.health <= 0 || target.hitResonance > 0) return;
+    if (target.state === 'DYING' || target.health <= 0) return;
     target.health -= amount;
     target.hitResonance = BOSS_HIT_RESONANCE;
     setShake(10, 0.2);
@@ -1186,7 +1245,7 @@ window.addEventListener('mouseup', (e) => {
 function shoot(bonusCharge = 0) {
     if (player.health <= 0) return;
     
-    if (player.weaponType === 'SWORD') {
+    if (player.weaponType === 'SWORD' && !player.throwingSword) {
         if (player.isSwinging) return;
         player.isSwinging = true;
         player.swingProgress = 0;
@@ -1258,6 +1317,10 @@ window.addEventListener('keydown', (e) => {
     }
 
     keys[e.code] = true;
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        toggleInventory();
+    }
     if (e.key === '\\') {
         window.location.href = 'editor.html';
     }
@@ -1332,7 +1395,7 @@ function update(timestamp) {
     lastTime = timestamp;
 
     if (gameState !== 'PLAYING') {
-        if (gameState === 'UPGRADE') {
+        if (gameState === 'UPGRADE' || gameState === 'PAUSED_INVENTORY') {
             draw();
         }
         requestAnimationFrame(update);
@@ -2649,16 +2712,32 @@ function draw() {
 
     // Draw Player Bullets
     player.bullets.forEach(p => {
-        ctx.fillStyle = '#fff';
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = player.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        ctx.fill();
+        if (player.throwingSword) {
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            const moveAngle = Math.atan2(p.vy, p.vx);
+            ctx.rotate(moveAngle + gameTime * 15);
+            const sl = (player.swordLength || 40) * (player.bulletSize/6) * (p.radius / 6);
+            const sw = 6 * (player.bulletSize/6) * (p.radius / 6);
+            ctx.fillStyle = '#fff';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = player.color;
+            ctx.fillRect(-sw/2, -sl/2, sw, sl);
+            ctx.fillStyle = '#444';
+            ctx.fillRect(-sw*1.5, 0, sw*3, 4);
+            ctx.restore();
+        } else {
+            ctx.fillStyle = '#fff';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = player.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
     });
 
     // Draw Sword
-    if (player.weaponType === 'SWORD' && player.health > 0) {
+    if (player.weaponType === 'SWORD' && player.health > 0 && !player.throwingSword) {
         const dx = mouseX - (player.x + player.width/2);
         const dy = mouseY - (player.y + player.height/2);
         const angle = Math.atan2(dy, dx);
