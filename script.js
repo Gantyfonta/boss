@@ -571,6 +571,13 @@ function resetRun(backToMenu = true) {
         document.getElementById('controls-screen').style.display = 'none';
         document.getElementById('win-screen').style.display = 'none';
         document.getElementById('ui').style.display = 'none';
+        
+        const indexScreen = document.getElementById('index-screen');
+        if (indexScreen) indexScreen.style.display = 'none';
+        const sandboxScreen = document.getElementById('sandbox-screen');
+        if (sandboxScreen) sandboxScreen.style.display = 'none';
+        const adminPanel = document.getElementById('admin-panel');
+        if (adminPanel) adminPanel.style.display = 'none';
     } else {
         startGame();
     }
@@ -1243,7 +1250,19 @@ window.addEventListener('keydown', (e) => {
         window.location.href = 'editor.html';
     }
     if (e.key === 'Escape') {
-        resetRun(true);
+        const indexScreen = document.getElementById('index-screen');
+        const sandboxScreen = document.getElementById('sandbox-screen');
+        const controlsScreen = document.getElementById('controls-screen');
+        const adminPanel = document.getElementById('admin-panel');
+
+        if ((indexScreen && indexScreen.style.display === 'flex') || 
+            (sandboxScreen && sandboxScreen.style.display === 'flex') ||
+            (controlsScreen && controlsScreen.style.display === 'flex') ||
+            (adminPanel && adminPanel.style.display === 'flex')) {
+            showTitle();
+        } else {
+            resetRun(true);
+        }
     }
     if (e.code === controls.reset && (gameState === 'PLAYING' || gameState === 'WIN')) {
         resetRun(false);
