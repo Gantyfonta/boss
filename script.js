@@ -810,6 +810,10 @@ function initLevel() {
     worldObjects = ARENA.map(obj => ({ ...obj }));
     lavaTimer = 0;
     lavaFlash = 0;
+    particles = [];
+    trails = [];
+    explosions = [];
+    texts = [];
     
     player.maxHealth = PLAYER_MAX_HEALTH_DEFAULT;
     player.health = player.maxHealth;
@@ -1131,6 +1135,8 @@ window.startSandboxRun = function() {
     sandboxAttacks = Array.from(atkCbs).map(cb => cb.value);
     
     document.getElementById('sandbox-screen').style.display = 'none';
+    document.getElementById('win-screen').style.display = 'none';
+    document.getElementById('title-screen').style.display = 'none';
     document.getElementById('ui').style.display = 'block';
     
     isInfiniteMode = false;
