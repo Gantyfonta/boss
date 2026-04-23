@@ -78,12 +78,12 @@
         </div>
 
         <!-- Sandbox Screen -->
-        <div id="sandbox-screen" class="overlay" style="display: none;">
+        <div id="sandbox-screen" class="overlay" style="display: none; padding-bottom: 20px;">
             <h2>SANDBOX MODE</h2>
-            <div style="display: flex; flex-wrap: wrap; gap: 20px; width: 90%; max-width: 800px; height: 80%; max-height: 400px; text-align: left;">
+            <div style="display: flex; flex-wrap: wrap; gap: 20px; width: 90%; max-width: 800px; height: 100%; max-height: calc(100vh - 200px); text-align: left; margin-bottom: 20px;">
                 <div style="flex: 1; min-width: 250px; background: rgba(0,0,0,0.5); padding: 15px; border-radius: 8px; overflow-y: auto;">
                     <h3 style="margin-top: 0; color: var(--accent-gold);">Player Upgrades</h3>
-                    <div id="sandbox-upgrades-list" style="display: flex; flex-direction: column; gap: 5px;">
+                    <div id="sandbox-upgrades-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 12px;">
                         <!-- Filled by JS -->
                     </div>
                 </div>
@@ -101,7 +101,7 @@
                     </div>
                 </div>
             </div>
-            <div style="margin-top: 20px; display: flex; gap: 10px;">
+            <div style="display: flex; gap: 10px; margin-top: auto;">
                 <button onclick="startSandboxRun()" style="background: #e67e22; box-shadow: 0 4px #d35400;">Start Run</button>
                 <button onclick="showTitle()" style="background: #555; box-shadow: 0 4px #333;">Cancel</button>
             </div>
@@ -141,7 +141,10 @@
             <div style="margin-top: 20px;">
                 <p style="color: var(--text-secondary);">The core has been neutralized.</p>
             </div>
-            <button onclick="resetRun()" style="margin-top: 20px; background: #555; box-shadow: 0 4px #333;">Back to Menu</button>
+            <div style="display: flex; gap: 10px; margin-top: 20px; justify-content: center;">
+                <button onclick="resetRun()" style="background: #555; box-shadow: 0 4px #333;">Back to Menu</button>
+                <button id="win-replay-btn" onclick="startSandboxRun()" style="display: none; background: #e67e22; box-shadow: 0 4px #d35400;">Replay Run</button>
+            </div>
         </div>
 
         <!-- Upgrade Screen -->

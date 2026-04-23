@@ -313,6 +313,8 @@ let dialogueActive = false;
 let currentInteractable = null;
 let isCustomMode = false;
 let isInfiniteMode = false;
+let isSandboxMode = false;
+let sandboxAttacks = [];
 let defeatedBossesCount = 0;
 let customLevelData = null;
 
@@ -408,6 +410,17 @@ const player = {
 // 3. BOSS DEFINITION
 function createBoss(index) {
     const data = BOSS_DATA[index];
+    
+    // Scale boss Health
+    let hpMod = 1.0;
+    if (isInfiniteMode) {
+        hpMod = 1.0 + (defeatedBossesCount * 0.15); // +15% hp per defeated boss layer
+    }
+    if (isSandboxMode) {
+        const hpVal = parseFloat(document.getElementById('sandbox-hp-val').innerText);
+        if (!isNaN(hpVal)) hpMod = hpVal;
+    }
+    
     return {
         id: index,
         x: data.spawnX,
@@ -415,8 +428,8 @@ function createBoss(index) {
         spawnX: data.spawnX,
         width: 80,
         height: 80,
-        health: BOSS_MAX_HEALTH,
-        maxHealth: BOSS_MAX_HEALTH,
+        health: Math.floor(BOSS_MAX_HEALTH * hpMod),
+        maxHealth: Math.floor(BOSS_MAX_HEALTH * hpMod),
         state: 'IDLE', 
         attackTimer: 2.5, // Calm start for each boss
         phase: 0,
@@ -1109,9 +1122,6 @@ window.showSandbox = function() {
     });
 };
 
-let isSandboxMode = false;
-let sandboxAttacks = [];
-
 window.startSandboxRun = function() {
     const atkCbs = document.querySelectorAll('.sandbox-atk-cb:checked');
     if (atkCbs.length === 0) {
@@ -1219,10 +1229,13 @@ function nextLevel() {
     gameState = 'WIN';
     document.getElementById('ui').style.display = 'none';
     document.getElementById('win-screen').style.display = 'flex';
+    const replayBtn = document.getElementById('win-replay-btn');
     if (isSandboxMode) {
         document.getElementById('final-time-text').innerText = `Sandbox Clear: ${formatTime(elapsedTime)}`;
+        if (replayBtn) replayBtn.style.display = 'inline-block';
     } else {
         document.getElementById('final-time-text').innerText = `Time: ${formatTime(elapsedTime)}`;
+        if (replayBtn) replayBtn.style.display = 'none';
     }
 }
 
@@ -1330,13 +1343,16 @@ window.addEventListener('keydown', (e) => {
         const sandboxScreen = document.getElementById('sandbox-screen');
         const controlsScreen = document.getElementById('controls-screen');
         const adminPanel = document.getElementById('admin-panel');
+        const inventoryScreen = document.getElementById('inventory-screen');
 
-        if ((indexScreen && indexScreen.style.display === 'flex') || 
+        if (inventoryScreen && inventoryScreen.style.display === 'flex') {
+            toggleInventory();
+        } else if ((indexScreen && indexScreen.style.display === 'flex') || 
             (sandboxScreen && sandboxScreen.style.display === 'flex') ||
             (controlsScreen && controlsScreen.style.display === 'flex') ||
             (adminPanel && adminPanel.style.display === 'flex')) {
             showTitle();
-        } else {
+        } else if (gameState !== 'TITLE') {
             resetRun(true);
         }
     }
