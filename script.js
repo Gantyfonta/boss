@@ -411,10 +411,12 @@ const player = {
 function createBoss(index) {
     const data = BOSS_DATA[index];
     
-    // Scale boss Health
+    // Scale boss Health and Speed
     let hpMod = 1.0;
+    let speedMod = 1.0;
     if (isInfiniteMode) {
-        hpMod = 1.0 + (defeatedBossesCount * 0.15); // +15% hp per defeated boss layer
+        hpMod = Math.pow(1.25, defeatedBossesCount);
+        speedMod = Math.pow(1.10, defeatedBossesCount);
     }
     if (isSandboxMode) {
         const hpVal = parseFloat(document.getElementById('sandbox-hp-val').innerText);
@@ -430,6 +432,7 @@ function createBoss(index) {
         height: 80,
         health: Math.floor(BOSS_MAX_HEALTH * hpMod),
         maxHealth: Math.floor(BOSS_MAX_HEALTH * hpMod),
+        speedMod: speedMod,
         state: 'IDLE', 
         attackTimer: 2.5, // Calm start for each boss
         phase: 0,
@@ -1436,8 +1439,11 @@ function update(timestamp) {
     // --- 0. BOSS LOGIC ---
     function updateBossEntity(b) {
         if (!b) return;
-        if (b.hitResonance > 0) b.hitResonance -= dt;
-        if (b.slowTimer > 0) b.slowTimer -= dt;
+        const _dt = dt; // store original dt
+        dt = _dt * (b.speedMod || 1.0); // scale up boss perceived time
+
+        if (b.hitResonance > 0) b.hitResonance -= _dt;
+        if (b.slowTimer > 0) b.slowTimer -= _dt;
 
         let effectiveDt = dt;
         if (b.slowTimer > 0) effectiveDt *= 0.6;
@@ -2005,6 +2011,7 @@ function update(timestamp) {
                 playerTakeDamage();
             }
         }
+        dt = _dt; // restore dt
     }
 
     updateBossEntity(boss);
