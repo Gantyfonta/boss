@@ -813,7 +813,6 @@ function initLevel() {
     particles = [];
     trails = [];
     explosions = [];
-    texts = [];
     
     player.maxHealth = PLAYER_MAX_HEALTH_DEFAULT;
     player.health = player.maxHealth;
