@@ -929,7 +929,11 @@ const UPGRADES = [
     { id: 'REACTIVE_ARMOR', title: 'Reactive Core', desc: 'Release nova when hit', rarity: 'RARE', run: () => player.reactiveArmor++ },
     { id: 'LAST_STAND', title: 'Final Protocol', desc: 'Invuln on fatal hit (1/run)', rarity: 'LEGENDARY', run: () => player.lastStandUsed = false },
     { id: 'TITAN_PLATE', title: 'Titan Plate', desc: 'Max HP +5, move speed -20%', rarity: 'RARE', run: () => { player.maxHealth += 5; player.health += 5; playerMoveSpeed *= 0.8; updateHealthUI(); } },
-    { id: 'SHARP_SHOOTER', title: 'Sharp Shooter', desc: 'DMG +50% at long range', rarity: 'RARE', run: () => player.sharpShooter = true }
+    { id: 'SHARP_SHOOTER', title: 'Sharp Shooter', desc: 'DMG +50% at long range', rarity: 'RARE', run: () => player.sharpShooter = true },
+    { id: 'SNIPER_ROUND', title: 'Sniper Core', desc: 'Pierce +1, Spd +50%, DMG +10', rarity: 'EPIC', run: () => { player.pierce = (player.pierce || 0) + 1; PLAYER_BULLET_SPEED *= 1.5; player.damage += 10; } },
+    { id: 'SCATTERGUN', title: 'Scatter Core', desc: '+3 Projectiles, -40% DMG', rarity: 'EPIC', run: () => { player.multishot += 3; player.damage = Math.max(1, player.damage * 0.6); } },
+    { id: 'WHIRLWIND', title: 'Whirlwind', desc: 'Attacks hit all around you', rarity: 'LEGENDARY', run: () => { player.whirlwind = true; } },
+    { id: 'VAMPIRIC_STRIKE', title: 'Vampiric Edge', desc: 'High lifesteal, Max HP -2', rarity: 'EPIC', run: () => { player.lifesteal = (player.lifesteal || 0) + 0.1; player.maxHealth = Math.max(1, player.maxHealth - 2); player.health = Math.min(player.health, player.maxHealth); updateHealthUI(); } }
 ];
 
 function showUpgradeScreen() {
@@ -1027,14 +1031,15 @@ window.showSandbox = function() {
         lbl.style.alignItems = 'center';
         lbl.style.gap = '10px';
         lbl.style.fontSize = '12px';
-        lbl.innerHTML = `<input type="checkbox" value="${up.id}" class="sandbox-up-cb"> <span>${up.title}</span>`;
+        lbl.title = up.desc; // Add tooltip for hover
+        lbl.innerHTML = `<input type="number" min="0" max="100" value="0" class="sandbox-up-input" data-id="${up.id}" style="width: 45px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; padding: 2px;"> <span>${up.title}</span>`;
         upList.appendChild(lbl);
     });
 
     // Populate Attacks
     const atkList = document.getElementById('sandbox-attacks-list');
     atkList.innerHTML = '';
-    const pool = ['BURST', 'TRIPLE_SHOT', 'WAVE', 'SINE', 'BOUNCE', 'WALL_STRIKE', 'CHARGE', 'BEAM_PREP', 'MINES', 'SPIRAL', 'SLAM_PREP', 'SUMMON', 'LAVA_PREP', 'PHASE_SHIFT', 'ORBITAL_STRIKE', 'GRAVITY_WELL', 'RING_SHOCK', 'CROSS_BEAM', 'STALACTITE', 'SUMMON_MINION'];
+    const pool = ['BURST', 'TRIPLE_SHOT', 'WAVE', 'SINE', 'BOUNCE', 'WALL_STRIKE', 'CHARGE', 'BEAM_PREP', 'MINES', 'SPIRAL', 'SLAM_PREP', 'SUMMON', 'LAVA_PREP', 'PHASE_SHIFT', 'ORBITAL_STRIKE', 'GRAVITY_WELL', 'RING_SHOCK', 'CROSS_BEAM', 'STALACTITE', 'SUMMON_MINION', 'METEOR_SHOWER', 'LASER_GRID'];
     pool.forEach(a => {
         const lbl = document.createElement('label');
         lbl.style.display = 'flex';
@@ -1070,10 +1075,17 @@ window.startSandboxRun = function() {
     initLevel();
 
     // Apply selected upgrades
-    const upCbs = document.querySelectorAll('.sandbox-up-cb:checked');
-    upCbs.forEach(cb => {
-        const up = UPGRADES.find(u => u.id === cb.value);
-        if (up) up.run();
+    const upInputs = document.querySelectorAll('.sandbox-up-input');
+    upInputs.forEach(input => {
+        const count = parseInt(input.value) || 0;
+        if (count > 0) {
+            const up = UPGRADES.find(u => u.id === input.dataset.id);
+            if (up) {
+                for (let i = 0; i < count; i++) {
+                    up.run();
+                }
+            }
+        }
     });
 };
 
@@ -1400,6 +1412,10 @@ function update(timestamp) {
                     b.attackTimer = 3.0;
                 } else if (b.state === 'PHASE_SHIFT') {
                     b.attackTimer = 2.0;
+                } else if (b.state === 'METEOR_SHOWER') {
+                    b.attackTimer = 2.0;
+                } else if (b.state === 'LASER_GRID') {
+                    b.attackTimer = 0.5;
                 }
             }
         } else if (b.state === 'RING_SHOCK') {
@@ -1598,6 +1614,33 @@ function update(timestamp) {
                     });
                 }
                 b.state = 'IDLE'; b.attackTimer = 1.5;
+            }
+        } else if (b.state === 'METEOR_SHOWER') {
+            b.attackTimer -= dt;
+            if (Math.floor(b.attackTimer * 10) % 3 === 0 && b.attackTimer > 0) {
+                b.projectiles.push({
+                    x: Math.random() * canvas.width, y: -50,
+                    vx: (Math.random() - 0.5) * 50, vy: 500 + Math.random() * 300,
+                    radius: 18, life: 3, type: 'LARGE'
+                });
+            }
+            if (b.attackTimer <= 0) { b.state = 'IDLE'; b.attackTimer = 1.8; }
+        } else if (b.state === 'LASER_GRID') {
+            b.attackTimer -= dt;
+            if (b.attackTimer <= 0) {
+                for (let i = 0; i < 5; i++) {
+                    b.projectiles.push({
+                        x: 0, y: i * 80 + 40,
+                        vx: 600, vy: 0,
+                        radius: 8, life: 2, type: 'NORMAL'
+                    });
+                    b.projectiles.push({
+                        x: i * 160 + 80, y: 0,
+                        vx: 0, vy: 600,
+                        radius: 8, life: 2, type: 'NORMAL'
+                    });
+                }
+                b.state = 'IDLE'; b.attackTimer = 2.0;
             }
         } else if (b.state === 'BURST') {
             b.attackTimer -= dt;
@@ -2104,7 +2147,7 @@ function update(timestamp) {
                 diff = Math.abs(diff);
 
                 const cone = 1.2 + (player.multishot - 1) * 0.5;
-                if (diff < cone) {
+                if (diff < cone || player.whirlwind) {
                     let dmg = player.damage * (1 + (player.currentSwingCharge || 0) * 2);
                     if (player.sharpShooter && dist > 300) dmg *= 1.5;
                     
@@ -2621,6 +2664,15 @@ function draw() {
         const angle = Math.atan2(dy, dx);
         ctx.save();
         ctx.translate(player.x + player.width/2, player.y + player.height/2);
+        
+        if (player.whirlwind && player.isSwinging) {
+            ctx.beginPath();
+            const reach = (player.swordLength || 70) * (player.multishot > 1 ? 1.2 : 1) + player.width/2;
+            ctx.arc(0, 0, reach, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${1.0 - player.swingProgress})`;
+            ctx.fill();
+        }
+
         let sr = -0.6;
         if (player.isSwinging) sr = -0.8 + (player.swingProgress * 1.6);
         ctx.rotate(angle + sr + Math.PI/2);
