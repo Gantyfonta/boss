@@ -640,6 +640,7 @@ window.showTitle = showTitle;
 window.postAnnouncement = postAnnouncement;
 window.clearAnnouncement = clearAnnouncement;
 window.adminLogin = adminLogin;
+window.selectWeapon = selectWeapon;
 window.toggleInventory = toggleInventory;
 
 function toggleInventory() {
