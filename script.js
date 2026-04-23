@@ -141,6 +141,7 @@ let jumpForce = -750;
 let playerMoveSpeed = 450;   
 const acceleration = 2500; 
 const coyoteTime = 0.25;
+let randomPlatformTimer = 0;
 
 // --- BOSS FIGHT CONSTANTS ---
 const PLAYER_MAX_HEALTH_DEFAULT = 10;
@@ -559,6 +560,7 @@ function resetRun(backToMenu = true) {
     if (backToMenu) {
         gameState = 'TITLE';
         isInfiniteMode = false;
+        isSandboxMode = false;
         defeatedBossesCount = 0;
         document.getElementById('rush-counter').style.display = 'block';
         document.getElementById('infinite-counter').style.display = 'none';
@@ -578,6 +580,10 @@ function showTitle() {
     document.getElementById('title-screen').style.display = 'flex';
     document.getElementById('controls-screen').style.display = 'none';
     document.getElementById('admin-panel').style.display = 'none';
+    const indexScreen = document.getElementById('index-screen');
+    if (indexScreen) indexScreen.style.display = 'none';
+    const sandboxScreen = document.getElementById('sandbox-screen');
+    if (sandboxScreen) sandboxScreen.style.display = 'none';
 }
 
 function showAdminPanel() {
@@ -626,6 +632,11 @@ window.postAnnouncement = postAnnouncement;
 window.clearAnnouncement = clearAnnouncement;
 window.adminLogin = adminLogin;
 window.selectWeapon = selectWeapon;
+
+// Attach new Sandbox & Index flows so they work from HTML
+if (typeof showIndex !== 'undefined') window.showIndex = showIndex;
+if (typeof showSandbox !== 'undefined') window.showSandbox = showSandbox;
+if (typeof startSandboxRun !== 'undefined') window.startSandboxRun = startSandboxRun;
 
 function selectWeapon(type) {
     selectedWeapon = type;
@@ -770,10 +781,28 @@ function initLevel() {
     }
     jumpForce = -750;
     PLAYER_BULLET_SPEED = 800;
+    randomPlatformTimer = 3.0;
     
     rushIndex = 0;
     if (isInfiniteMode) {
         boss = createInfiniteBoss();
+    } else if (isSandboxMode) {
+        const hpScale = parseFloat(document.getElementById('sandbox-hp').value) || 1.0;
+        const color = '#9b59b6';
+        boss = {
+            id: -2,
+            x: 400, y: 150, spawnX: 400,
+            width: 80, height: 80,
+            health: BOSS_MAX_HEALTH * hpScale,
+            maxHealth: BOSS_MAX_HEALTH * hpScale,
+            state: 'IDLE', attackTimer: 2.0, phase: 0,
+            color: color, name: 'SANDBOX CORE',
+            targetX: 400, targetY: 150,
+            projectiles: [], mines: [], seekers: [], minions: [],
+            beam: { active: false, x1: 0, y1: 0, x2: 0, y2: 0, width: 0, timer: 0 },
+            lastSpiralTick: 0, hitResonance: 0, slowTimer: 0,
+            phases: [{ threshold: 1.0, attacks: sandboxAttacks }]
+        };
     } else {
         boss = createBoss(0);
     }
@@ -935,6 +964,12 @@ function showUpgradeScreen() {
         `;
         card.onclick = () => {
             up.run();
+            // Track in collection index
+            const collected = JSON.parse(localStorage.getItem('collectedUpgrades') || '[]');
+            if (!collected.includes(up.id)) {
+                collected.push(up.id);
+                localStorage.setItem('collectedUpgrades', JSON.stringify(collected));
+            }
             screen.style.display = 'none';
             gameState = 'PLAYING';
             spawnNextBoss();
@@ -944,6 +979,96 @@ function showUpgradeScreen() {
     });
     sfx.win();
 }
+
+// --- INDEX MENU ---
+window.showIndex = function() {
+    document.getElementById('title-screen').style.display = 'none';
+    document.getElementById('index-screen').style.display = 'flex';
+    const grid = document.getElementById('index-grid');
+    grid.innerHTML = '';
+    const collected = JSON.parse(localStorage.getItem('collectedUpgrades') || '[]');
+    
+    UPGRADES.forEach(up => {
+        const isCollected = collected.includes(up.id);
+        const el = document.createElement('div');
+        el.className = `upgrade-card ${up.rarity}`;
+        el.style.opacity = isCollected ? '1.0' : '0.2';
+        el.style.filter = isCollected ? 'none' : 'grayscale(100%)';
+        el.style.transform = 'none';
+        el.style.cursor = 'default';
+        el.innerHTML = `
+            <div class="rarity">${up.rarity}</div>
+            <h3 style="font-size: 14px;">${isCollected ? up.title : '???'}</h3>
+            <p style="font-size: 10px;">${isCollected ? up.desc : 'Unlocked by finding in runs'}</p>
+        `;
+        grid.appendChild(el);
+    });
+};
+
+// --- SANDBOX MODE ---
+window.showSandbox = function() {
+    document.getElementById('title-screen').style.display = 'none';
+    const screen = document.getElementById('sandbox-screen');
+    screen.style.display = 'flex';
+    
+    // Populate Upgrades
+    const upList = document.getElementById('sandbox-upgrades-list');
+    upList.innerHTML = '';
+    UPGRADES.forEach(up => {
+        const lbl = document.createElement('label');
+        lbl.style.display = 'flex';
+        lbl.style.alignItems = 'center';
+        lbl.style.gap = '10px';
+        lbl.style.fontSize = '12px';
+        lbl.innerHTML = `<input type="checkbox" value="${up.id}" class="sandbox-up-cb"> <span>${up.title}</span>`;
+        upList.appendChild(lbl);
+    });
+
+    // Populate Attacks
+    const atkList = document.getElementById('sandbox-attacks-list');
+    atkList.innerHTML = '';
+    const pool = ['BURST', 'TRIPLE_SHOT', 'WAVE', 'SINE', 'BOUNCE', 'WALL_STRIKE', 'CHARGE', 'BEAM_PREP', 'MINES', 'SPIRAL', 'SLAM_PREP', 'SUMMON', 'LAVA_PREP', 'PHASE_SHIFT', 'ORBITAL_STRIKE', 'GRAVITY_WELL', 'RING_SHOCK', 'CROSS_BEAM', 'STALACTITE', 'SUMMON_MINION'];
+    pool.forEach(a => {
+        const lbl = document.createElement('label');
+        lbl.style.display = 'flex';
+        lbl.style.alignItems = 'center';
+        lbl.style.gap = '5px';
+        lbl.innerHTML = `<input type="checkbox" value="${a}" class="sandbox-atk-cb" checked> <span>${a}</span>`;
+        atkList.appendChild(lbl);
+    });
+};
+
+let isSandboxMode = false;
+let sandboxAttacks = [];
+
+window.startSandboxRun = function() {
+    const atkCbs = document.querySelectorAll('.sandbox-atk-cb:checked');
+    if (atkCbs.length === 0) {
+        alert("Please select at least 1 boss attack.");
+        return;
+    }
+    sandboxAttacks = Array.from(atkCbs).map(cb => cb.value);
+    
+    document.getElementById('sandbox-screen').style.display = 'none';
+    document.getElementById('ui').style.display = 'block';
+    
+    isInfiniteMode = false;
+    isSandboxMode = true;
+    defeatedBossesCount = 0;
+    gameState = 'PLAYING';
+    startTime = Date.now();
+    timerRunning = false;
+    timerFinished = false;
+    
+    initLevel();
+
+    // Apply selected upgrades
+    const upCbs = document.querySelectorAll('.sandbox-up-cb:checked');
+    upCbs.forEach(cb => {
+        const up = UPGRADES.find(u => u.id === cb.value);
+        if (up) up.run();
+    });
+};
 
 function spawnNextBoss() {
     if (isInfiniteMode) {
@@ -1009,14 +1134,17 @@ function respawn() {
 }
 
 function nextLevel() {
-    // Legacy function, might be called by win condition
     sfx.win();
     timerRunning = false;
     timerFinished = true;
     gameState = 'WIN';
     document.getElementById('ui').style.display = 'none';
     document.getElementById('win-screen').style.display = 'flex';
-    document.getElementById('final-time-text').innerText = `Time: ${formatTime(elapsedTime)}`;
+    if (isSandboxMode) {
+        document.getElementById('final-time-text').innerText = `Sandbox Clear: ${formatTime(elapsedTime)}`;
+    } else {
+        document.getElementById('final-time-text').innerText = `Time: ${formatTime(elapsedTime)}`;
+    }
 }
 
 // 5. INPUT LISTENERS
@@ -1208,7 +1336,7 @@ function update(timestamp) {
             b.y += (b.targetY - b.y) * effectiveDt * 2;
 
             if (b.attackTimer <= 0) {
-                const pool = b.phases[b.phase].attacks;
+                const pool = (b.phases && b.phases[b.phase || 0]) ? b.phases[b.phase || 0].attacks : ['BURST'];
                 b.state = pool[Math.floor(Math.random() * pool.length)];
                 
                 if (b.state === 'BURST') b.attackTimer = 1.5;
@@ -1369,6 +1497,27 @@ function update(timestamp) {
                 }
                 b.state = 'IDLE'; b.attackTimer = 2.0;
             }
+        } else if (b.state === 'SUMMON_MINION') {
+            b.attackTimer -= dt;
+            if (b.attackTimer <= 0) {
+                const pool = ['BURST', 'TRIPLE_SHOT', 'SINE'][Math.floor(Math.random() * 3)];
+                b.minions = b.minions || [];
+                if (b.minions.length < 5) {
+                    b.minions.push({
+                        x: b.x + b.width/2 - 20, y: b.y + b.height/2 + 50, spawnX: b.x + b.width/2 - 20,
+                        width: 40, height: 40,
+                        health: 2, maxHealth: 2,
+                        state: 'IDLE', attackTimer: 1.0, phase: 0,
+                        color: '#e74c3c', name: 'MINION',
+                        targetX: b.x + b.width/2 - 20, targetY: b.y + b.height/2 + 50,
+                        projectiles: [], mines: [], seekers: [],
+                        beam: { active: false, x1: 0, y1: 0, x2: 0, y2: 0, width: 0, timer: 0 },
+                        lastSpiralTick: 0, hitResonance: 0, slowTimer: 0, isMinion: true,
+                        phases: [{ threshold: 1.0, attacks: [pool] }]
+                    });
+                }
+                b.state = 'IDLE'; b.attackTimer = 2.5;
+            }
         } else if (b.state === 'LAVA_PREP') {
             b.attackTimer -= dt;
             lavaFlash = b.attackTimer;
@@ -1455,8 +1604,9 @@ function update(timestamp) {
                 const dx = (player.x + player.width/2) - (b.x + b.width/2);
                 const dy = (player.y + player.height/2) - (b.y + b.height/2);
                 const baseAngle = Math.atan2(dy, dx);
-                const shots = b.id === 1 ? 5 : 3; // Gamma fires more shots
-                const spread = b.id === 1 ? 0.6 : 0.25;
+                const id = b.id || 0;
+                const shots = id === 1 ? 5 : 3; // Gamma fires more shots
+                const spread = id === 1 ? 0.6 : 0.25;
                 
                 for (let i = 0; i < shots; i++) {
                     const angle = baseAngle + (i - (shots-1)/2) * (spread / (shots-1 || 1));
@@ -1492,7 +1642,7 @@ function update(timestamp) {
             const tx = player.x + player.width/2;
             const ty = player.y + player.height/2;
             // Gamma tracks player faster
-            const trackSpeed = b.id === 1 ? 4 : 2;
+            const trackSpeed = (b.id || 0) === 1 ? 4 : 2;
             b.beam.targetX += (tx - b.beam.targetX) * dt * trackSpeed;
             b.beam.targetY += (ty - b.beam.targetY) * dt * trackSpeed;
             b.beam.x1 = b.x + b.width/2;
@@ -1528,7 +1678,7 @@ function update(timestamp) {
         } else if (b.state === 'MINES') {
             b.attackTimer -= dt;
             if (b.attackTimer <= 0) {
-                const count = b.id === 1 ? 5 : 3;
+                const count = (b.id || 0) === 1 ? 5 : 3;
                 for (let i = 0; i < count; i++) {
                     b.mines.push({
                         x: Math.random() * (canvas.width - 100) + 50,
@@ -1548,7 +1698,7 @@ function update(timestamp) {
             if (currentTick !== b.lastSpiralTick && b.attackTimer > 0) {
                 b.lastSpiralTick = currentTick;
                 const angle = gameTime * 6;
-                const count = b.id === 1 ? 3 : 2; // More points for Gamma
+                const count = (b.id || 0) === 1 ? 3 : 2; // More points for Gamma
                 for (let i = 0; i < count; i++) {
                     const finalAngle = angle + (i * (Math.PI * 2 / count));
                     b.projectiles.push({
@@ -1570,8 +1720,13 @@ function update(timestamp) {
             b.attackTimer -= dt;
             spawnParticles(b.x + Math.random()*b.width, b.y + Math.random()*b.height, b.color, 2);
             if (b.attackTimer <= 0) {
-                if (isInfiniteMode || rushIndex < BOSS_DATA.length - 1) showUpgradeScreen();
-                else spawnNextBoss();
+                if (isSandboxMode) {
+                    nextLevel(); // End sandbox run
+                } else if (isInfiniteMode || rushIndex < BOSS_DATA.length - 1) {
+                    showUpgradeScreen();
+                } else {
+                    spawnNextBoss();
+                }
             }
         }
 
@@ -1594,6 +1749,24 @@ function update(timestamp) {
             if (p.type === 'BOUNCE') {
                 if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
                 if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+            }
+
+            // Check collision with breakable platforms
+            let hitPlatform = false;
+            for (let i = 0; i < worldObjects.length; i++) {
+                let obj = worldObjects[i];
+                if (obj.type === 'PLATFORM' && p.x > obj.currentX && p.x < obj.currentX + obj.width && p.y > obj.currentY && p.y < obj.currentY + obj.height) {
+                    hitPlatform = true;
+                    if (obj.isBreakable) {
+                        obj.health--;
+                        if (obj.health <= 0) obj.isBroken = true;
+                    }
+                    break;
+                }
+            }
+            if (hitPlatform) {
+                spawnParticles(p.x, p.y, b.color, 5);
+                return false;
             }
 
             p.life -= dt;
@@ -1628,6 +1801,25 @@ function update(timestamp) {
             
             s.x += s.vx * dt;
             s.y += s.vy * dt;
+
+            // Check collision with breakable platforms
+            let hitPlatform = false;
+            for (let i = 0; i < worldObjects.length; i++) {
+                let obj = worldObjects[i];
+                if (obj.type === 'PLATFORM' && s.x > obj.currentX && s.x < obj.currentX + obj.width && s.y > obj.currentY && s.y < obj.currentY + obj.height) {
+                    hitPlatform = true;
+                    if (obj.isBreakable) {
+                        obj.health--;
+                        if (obj.health <= 0) obj.isBroken = true;
+                    }
+                    break;
+                }
+            }
+            if (hitPlatform) {
+                spawnParticles(s.x, s.y, b.color, 5);
+                return false;
+            }
+
             s.life -= dt;
             
             if (dist < s.radius + player.width/2) {
@@ -2176,6 +2368,27 @@ function update(timestamp) {
     if (player.x < 0) player.x = 0;
     if (player.x > canvas.width - player.width) player.x = canvas.width - player.width;
 
+    // Random platforms logic
+    randomPlatformTimer -= dt;
+    if (randomPlatformTimer <= 0) {
+        randomPlatformTimer = 3 + Math.random() * 4; // Spawn every 3-7 seconds
+        let breakableCount = worldObjects.filter(o => o.isBreakable && !o.isBroken).length;
+        if (breakableCount < 4) { // Max 4 breakable platforms on screen
+            let platW = 60 + Math.random() * 40;
+            let platX = 150 + Math.random() * (500 - platW);
+            let platY = 150 + Math.random() * 150;
+            worldObjects.push({
+                x: platX, y: platY, width: platW, height: 15,
+                type: 'PLATFORM', isBreakable: true, health: 3 // Takes 3 hits to break
+            });
+            spawnParticles(platX + platW/2, platY + 7, '#3498db', 10);
+            sfx.land();
+        }
+    }
+
+    // Cleanup broken platforms
+    worldObjects = worldObjects.filter(obj => !obj.isBroken);
+
     draw();
     requestAnimationFrame(update);
 }
@@ -2257,8 +2470,12 @@ function draw() {
         let glow = false;
         
         if (obj.type === 'PLATFORM') {
-            color = '#2f3542';
+            color = obj.isBreakable ? (obj.health < 3 ? '#e74c3c' : '#3498db') : '#2f3542';
             ctx.strokeStyle = '#3f4552';
+            if (obj.isBreakable) {
+                glow = true;
+                ctx.strokeStyle = '#fff';
+            }
             ctx.lineWidth = 1;
         }
         else if (obj.type === 'SPIKE') {
@@ -2490,19 +2707,10 @@ function draw() {
             ctx.globalAlpha = 1.0;
         }
 
-        // Minions
+        // Minions draw handled recursively or via loop below but keeping the legacy box rendering as fallback (wait, we shouldn't keep the legacy box rendering if we call drawBossEntity)
         if (b.minions) {
             b.minions.forEach(m => {
-                ctx.save();
-                ctx.translate(m.x - b.x - b.width/2 + m.width/2, m.y - b.y - b.height/2 + m.height/2);
-                const ms = 1 + Math.sin(gameTime * 8) * 0.1;
-                ctx.scale(ms, ms);
-                if (m.hitResonance > 0) ctx.fillStyle = '#fff';
-                else ctx.fillStyle = m.color;
-                ctx.fillRect(-m.width/2, -m.height/2, m.width, m.height);
-                ctx.fillStyle = '#fff';
-                ctx.fillRect(-m.width/4, -m.height/4, m.width/2, m.height/2);
-                ctx.restore();
+                drawBossEntity(m); // Recursively call the draw function to render all minions properties the exact same way like projectiles and seekers!
             });
         }
 

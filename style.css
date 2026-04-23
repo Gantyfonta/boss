@@ -470,3 +470,14 @@ button.active {
     color: white;
 }
 
+/* Sandbox custom styles */
+.sandbox-up-cb, .sandbox-atk-cb {
+    accent-color: var(--accent-blue);
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+.sandbox-up-cb:checked, .sandbox-atk-cb:checked {
+    accent-color: var(--accent-gold);
+}
+

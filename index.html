@@ -40,15 +40,60 @@
             <p>The Final Encounter</p>
             <div class="menu-buttons">
                 <button onclick="startGame()">Start Battle</button>
-                <button onclick="startInfiniteMode()" style="background: #e67e22; box-shadow: 0 4px #d35400;">Infinite Mode</button>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="startInfiniteMode()" style="background: #e67e22; box-shadow: 0 4px #d35400; flex: 1;">Infinite</button>
+                    <button onclick="showSandbox()" style="background: #9b59b6; box-shadow: 0 4px #8e44ad; flex: 1;">Sandbox</button>
+                </div>
                 <div style="display: flex; gap: 10px; margin: 10px 0;">
                     <button id="weapon-gun" onclick="selectWeapon('GUN')" style="flex: 1; border: 2px solid var(--accent-blue);">GUN</button>
                     <button id="weapon-sword" onclick="selectWeapon('SWORD')" style="flex: 1; opacity: 0.5;">SWORD</button>
                 </div>
-                <button onclick="showControls()">Controls</button>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="showControls()" style="flex: 1;">Controls</button>
+                    <button onclick="showIndex()" style="flex: 1; background: #6c5ce7; box-shadow: 0 4px #5f27cd;">Index</button>
+                </div>
                 <button id="admin-panel-btn" onclick="showAdminPanel()" style="display: none; background: #3498db; box-shadow: 0 4px #2980b9;">Admin Panel</button>
             </div>
             <p id="admin-login-link" onclick="adminLogin()" style="font-size: 10px; opacity: 0.3; margin-top: 20px; cursor: pointer;">Admin Login</p>
+        </div>
+
+        <!-- Index Screen -->
+        <div id="index-screen" class="overlay" style="display: none;">
+            <h2>UPGRADE INDEX</h2>
+            <div id="index-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-height: 400px; overflow-y: auto; width: 80%; max-width: 600px; margin-bottom: 20px; padding-right: 10px;">
+                <!-- Filled by JS -->
+            </div>
+            <button onclick="showTitle()" style="background: #555; box-shadow: 0 4px #333;">Back to Menu</button>
+        </div>
+
+        <!-- Sandbox Screen -->
+        <div id="sandbox-screen" class="overlay" style="display: none;">
+            <h2>SANDBOX MODE</h2>
+            <div style="display: flex; gap: 20px; width: 90%; max-width: 800px; height: 400px; text-align: left;">
+                <div style="flex: 1; background: rgba(0,0,0,0.5); padding: 15px; border-radius: 8px; overflow-y: auto;">
+                    <h3 style="margin-top: 0; color: var(--accent-gold);">Player Upgrades</h3>
+                    <div id="sandbox-upgrades-list" style="display: flex; flex-direction: column; gap: 5px;">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+                <div style="flex: 1; background: rgba(0,0,0,0.5); padding: 15px; border-radius: 8px; overflow-y: auto;">
+                    <h3 style="margin-top: 0; color: #ff4757;">Boss Configuration</h3>
+                    <div>
+                        <label style="display: block; margin-bottom: 5px;">Base Health Multiplier: <span id="sandbox-hp-val">1.0</span>x</label>
+                        <input type="range" id="sandbox-hp" min="0.5" max="5.0" step="0.5" value="1.0" style="width: 100%; margin-bottom: 15px;" oninput="document.getElementById('sandbox-hp-val').innerText = this.value">
+                    </div>
+                    <div style="margin-bottom: 10px;">
+                        <strong>Boss Attacks (Select at least 1)</strong>
+                    </div>
+                    <div id="sandbox-attacks-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 12px;">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top: 20px; display: flex; gap: 10px;">
+                <button onclick="startSandboxRun()" style="background: #e67e22; box-shadow: 0 4px #d35400;">Start Run</button>
+                <button onclick="showTitle()" style="background: #555; box-shadow: 0 4px #333;">Cancel</button>
+            </div>
         </div>
 
         <!-- Controls Screen -->
