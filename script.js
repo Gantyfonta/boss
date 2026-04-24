@@ -226,6 +226,7 @@ let isMouseDown = false;
 let isShootKeyDown = false;
 let currentLevel = 1;
 let currentXP = 0;
+let bufferedXP = 0;
 
 // --- JUICE & POLISH ---
 let particles = [];
@@ -1214,6 +1215,14 @@ const UPGRADES = [
     { id: 'XP_BOOST', title: 'Core Extractor', desc: 'Bosses grant +25% more XP', rarity: 'LEGENDARY', run: () => { player.xpMultiplier = (player.xpMultiplier || 1.0) + 0.25; } }
 ];
 
+function checkLevelUp() {
+    let reqXP = Math.floor(1.8 * Math.pow(currentLevel, 2));
+    if (currentXP >= reqXP && gameState === 'PLAYING') {
+        currentLevel++;
+        showUpgradeScreen();
+    }
+}
+
 function showUpgradeScreen() {
     gameState = 'UPGRADE';
     const screen = document.getElementById('upgrade-screen');
@@ -1270,7 +1279,10 @@ function showUpgradeScreen() {
             }
             screen.style.display = 'none';
             gameState = 'PLAYING';
-            spawnNextBoss();
+            if (!boss || boss.health <= 0 || boss.state === 'DYING') {
+                spawnNextBoss();
+            }
+            checkLevelUp();
             sfx.portal();
         };
         container.appendChild(card);
@@ -1496,6 +1508,10 @@ function bossTakeDamage(target, amount = player.damage) {
                 homingDelay: 1.0 + Math.random() * 1.5 // delays homing for a scatter effect
             });
         }
+        // Release buffered XP
+        currentXP += bufferedXP;
+        bufferedXP = 0;
+        checkLevelUp();
     }
 }
 
@@ -2597,12 +2613,12 @@ function update(timestamp) {
             if (dist < player.radius + 15) {
                 // Collect
                 const xpGain = orb.value * (player.xpMultiplier || 1.0);
-                currentXP += xpGain;
-                let reqXP = Math.floor(1.8 * Math.pow(currentLevel, 2));
                 
-                if (currentXP >= reqXP) {
-                    currentLevel++;
-                    showUpgradeScreen();
+                if (boss && boss.health > 0 && boss.state !== 'DYING') {
+                    bufferedXP += xpGain;
+                } else {
+                    currentXP += xpGain;
+                    checkLevelUp();
                 }
                 
                 sfx.land(); // Tiny tick sound? Land works well enough
