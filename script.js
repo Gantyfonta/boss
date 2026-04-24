@@ -420,7 +420,7 @@ function createBoss(index) {
     if (isInfiniteMode) {
         hpMod = Math.pow(1.25, defeatedBossesCount);
         speedMod = Math.pow(1.10, defeatedBossesCount);
-        const availableTraits = ['HOMING', 'BOOMERANG', 'RAGE', 'DEPRESSED', 'TRIUMVIRATE', 'STONE', 'SHARP', 'HEAL', 'CHILL'];
+        const availableTraits = ['HOMING', 'BOOMERANG', 'RAGE', 'DEPRESSED', 'TRIUMVIRATE', 'STONE', 'SHARP', 'HEAL', 'CHILL', 'BOUNCY', 'GHOST'];
         let chosenTrait = availableTraits[Math.floor(Math.random() * availableTraits.length)];
         if (chosenTrait === 'TRIUMVIRATE') {
             traits.push('TRIUMVIRATE');
@@ -2049,26 +2049,46 @@ function update(timestamp) {
             }
 
             if (p.type === 'BOUNCE') {
-                if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
-                if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
-            }
-
-            // Check collision with breakable platforms
-            let hitPlatform = false;
-            for (let i = 0; i < worldObjects.length; i++) {
-                let obj = worldObjects[i];
-                if (obj.type === 'PLATFORM' && p.x > obj.currentX && p.x < obj.currentX + obj.width && p.y > obj.currentY && p.y < obj.currentY + obj.height) {
-                    hitPlatform = true;
-                    if (obj.isBreakable) {
-                        obj.health--;
-                        if (obj.health <= 0) obj.isBroken = true;
-                    }
-                    break;
+                if (p.x < 0) { p.x = 0; p.vx *= -1; }
+                else if (p.x > canvas.width) { p.x = canvas.width; p.vx *= -1; }
+                if (p.y < 0) { p.y = 0; p.vy *= -1; }
+                else if (p.y > canvas.height) { p.y = canvas.height; p.vy *= -1; }
+            } else if (b.traits && b.traits.includes('BOUNCY')) {
+                let bounced = false;
+                if (p.x < 0) { p.x = 0; p.vx *= -1; bounced = true; }
+                else if (p.x > canvas.width) { p.x = canvas.width; p.vx *= -1; bounced = true; }
+                if (p.y < 0) { p.y = 0; p.vy *= -1; bounced = true; }
+                else if (p.y > canvas.height) { p.y = canvas.height; p.vy *= -1; bounced = true; }
+                if (bounced) {
+                    p.bounces = (p.bounces || 0) + 1;
+                    if (p.bounces > 3) p.life = 0;
                 }
             }
-            if (hitPlatform) {
-                spawnParticles(p.x, p.y, b.color, 5);
-                return false;
+
+            // Check collision with breakable platforms (and non-breakable)
+            if (!b.traits || !b.traits.includes('GHOST')) {
+                let hitPlatform = false;
+                for (let i = 0; i < worldObjects.length; i++) {
+                    let obj = worldObjects[i];
+                    if (obj.type === 'PLATFORM' && p.x > obj.currentX && p.x < obj.currentX + obj.width && p.y > obj.currentY && p.y < obj.currentY + obj.height) {
+                        hitPlatform = true;
+                        if (obj.isBreakable) {
+                            obj.health--;
+                            if (obj.health <= 0) obj.isBroken = true;
+                        }
+                        break;
+                    }
+                }
+                if (hitPlatform) {
+                    if (b.traits && b.traits.includes('BOUNCY') && (p.bounces || 0) < 3) {
+                        p.vy *= -1;
+                        p.vx *= -1;
+                        p.bounces = (p.bounces || 0) + 1;
+                    } else {
+                        spawnParticles(p.x, p.y, b.color, 5);
+                        return false;
+                    }
+                }
             }
 
             p.life -= dt;
@@ -2105,21 +2125,23 @@ function update(timestamp) {
             s.y += s.vy * dt;
 
             // Check collision with breakable platforms
-            let hitPlatform = false;
-            for (let i = 0; i < worldObjects.length; i++) {
-                let obj = worldObjects[i];
-                if (obj.type === 'PLATFORM' && s.x > obj.currentX && s.x < obj.currentX + obj.width && s.y > obj.currentY && s.y < obj.currentY + obj.height) {
-                    hitPlatform = true;
-                    if (obj.isBreakable) {
-                        obj.health--;
-                        if (obj.health <= 0) obj.isBroken = true;
+            if (!b.traits || !b.traits.includes('GHOST')) {
+                let hitPlatform = false;
+                for (let i = 0; i < worldObjects.length; i++) {
+                    let obj = worldObjects[i];
+                    if (obj.type === 'PLATFORM' && s.x > obj.currentX && s.x < obj.currentX + obj.width && s.y > obj.currentY && s.y < obj.currentY + obj.height) {
+                        hitPlatform = true;
+                        if (obj.isBreakable) {
+                            obj.health--;
+                            if (obj.health <= 0) obj.isBroken = true;
+                        }
+                        break;
                     }
-                    break;
                 }
-            }
-            if (hitPlatform) {
-                spawnParticles(s.x, s.y, b.color, 5);
-                return false;
+                if (hitPlatform) {
+                    spawnParticles(s.x, s.y, b.color, 5);
+                    return false;
+                }
             }
 
             s.life -= dt;
@@ -3098,7 +3120,11 @@ function draw() {
         ctx.shadowBlur = 20;
         ctx.shadowColor = b.color;
         
-        if (b.state === 'DYING') ctx.globalAlpha = Math.random();
+        if (b.state === 'DYING') {
+            ctx.globalAlpha = Math.random();
+        } else if (b.traits && b.traits.includes('GHOST')) {
+            ctx.globalAlpha = 0.5;
+        }
         
         // Animation based on state (Squash, stretch, rotation)
         let stateScaleX = 1;
@@ -3201,6 +3227,22 @@ function draw() {
             } else if (ts.includes('CHILL')) {
                 ctx.fillStyle = '#000';
                 ctx.fillRect(-b.width/3, -b.height/4, b.width*0.66, 8);
+            } else if (ts.includes('BOUNCY')) {
+                ctx.beginPath();
+                ctx.arc(-b.width/6, -b.height/6, 5, 0, Math.PI*2);
+                ctx.arc(b.width/6, -b.height/6, 5, 0, Math.PI*2);
+                ctx.stroke();
+                ctx.fillStyle = '#e67e22';
+                ctx.fill();
+            } else if (ts.includes('GHOST')) {
+                ctx.globalAlpha = 0.6;
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(-b.width/6, -b.height/6, 4, 0, Math.PI*2);
+                ctx.arc(b.width/6, -b.height/6, 4, 0, Math.PI*2);
+                ctx.fill();
+                ctx.fillRect(-b.width/4, b.height/4, b.width/2, b.height/4);
+                ctx.globalAlpha = 1.0;
             }
             
             ctx.restore();
@@ -3288,6 +3330,11 @@ function draw() {
         
         ctx.restore();
 
+        // Determine opacity
+        const projAlpha = (b.traits && b.traits.includes('GHOST')) ? 0.4 : 1.0;
+        
+        ctx.globalAlpha = projAlpha;
+
         // Projectiles
         b.projectiles.forEach(p => {
             ctx.fillStyle = p.type === 'LARGE' ? '#ffa502' : b.color;
@@ -3325,12 +3372,15 @@ function draw() {
             }
             ctx.restore();
         });
+        
+        ctx.globalAlpha = 1.0;
     }
 
     drawBossEntity(boss);
 
     // Draw Seekers
     if (boss) {
+        ctx.globalAlpha = (boss.traits && boss.traits.includes('GHOST')) ? 0.4 : 1.0;
         boss.seekers.forEach(s => {
             ctx.fillStyle = '#fff';
             ctx.shadowBlur = 15;
@@ -3342,6 +3392,7 @@ function draw() {
             // Trail
             addTrail(s.x - s.radius, s.y - s.radius, s.radius*2, s.radius*2, boss.color);
         });
+        ctx.globalAlpha = 1.0;
     }
     
     ctx.restore();
