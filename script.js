@@ -145,7 +145,7 @@ let randomPlatformTimer = 0;
 
 // --- BOSS FIGHT CONSTANTS ---
 const PLAYER_MAX_HEALTH_DEFAULT = 10;
-const BOSS_MAX_HEALTH = 200; // 20 hits (10 damage per dash/shot)
+const BOSS_MAX_HEALTH = 1000; // 5x original 200 hp
 let PLAYER_BULLET_SPEED = 800;
 let PLAYER_FIRE_RATE = 0.25;
 const INVULN_DURATION = 1.2;
@@ -227,6 +227,7 @@ let currentXP = 0;
 
 // --- JUICE & POLISH ---
 let particles = [];
+let xpOrbs = [];
 let trails = [];
 let screenShake = 0;
 let shakeTime = 0;
@@ -417,20 +418,23 @@ function createBoss(index) {
     let hpMod = 1.0;
     let speedMod = 1.0;
     let traits = [];
+    
+    // Always assign a trait so users can see it, based on the prompt's ambiguity:
+    const availableTraits = ['HOMING', 'BOOMERANG', 'RAGE', 'DEPRESSED', 'TRIUMVIRATE', 'STONE', 'SHARP', 'HEAL', 'CHILL', 'BOUNCY', 'GHOST'];
+    let chosenTrait = availableTraits[Math.floor(Math.random() * availableTraits.length)];
+    if (chosenTrait === 'TRIUMVIRATE') {
+        traits.push('TRIUMVIRATE');
+        const subset = availableTraits.filter(t => t !== 'TRIUMVIRATE');
+        const t1 = subset.splice(Math.floor(Math.random() * subset.length), 1)[0];
+        const t2 = subset.splice(Math.floor(Math.random() * subset.length), 1)[0];
+        traits.push(t1, t2);
+    } else {
+        traits.push(chosenTrait);
+    }
+
     if (isInfiniteMode) {
         hpMod = Math.pow(1.25, defeatedBossesCount);
         speedMod = Math.pow(1.10, defeatedBossesCount);
-        const availableTraits = ['HOMING', 'BOOMERANG', 'RAGE', 'DEPRESSED', 'TRIUMVIRATE', 'STONE', 'SHARP', 'HEAL', 'CHILL', 'BOUNCY', 'GHOST'];
-        let chosenTrait = availableTraits[Math.floor(Math.random() * availableTraits.length)];
-        if (chosenTrait === 'TRIUMVIRATE') {
-            traits.push('TRIUMVIRATE');
-            const subset = availableTraits.filter(t => t !== 'TRIUMVIRATE');
-            const t1 = subset.splice(Math.floor(Math.random() * subset.length), 1)[0];
-            const t2 = subset.splice(Math.floor(Math.random() * subset.length), 1)[0];
-            traits.push(t1, t2);
-        } else {
-            traits.push(chosenTrait);
-        }
     }
     if (isSandboxMode) {
         const hpVal = parseFloat(document.getElementById('sandbox-hp-val').innerText);
@@ -839,6 +843,7 @@ function initLevel() {
     lavaTimer = 0;
     lavaFlash = 0;
     particles = [];
+    xpOrbs = [];
     trails = [];
     explosions = [];
     
@@ -939,7 +944,9 @@ function updateHealthUI() {
         bossBar.style.width = Math.max(0, percent) + '%';
         bossBar.style.background = boss.color;
         if (bossNameDisplay) {
-            bossNameDisplay.innerText = boss.name;
+            let trStr = "";
+            if (boss.traits && boss.traits.length > 0) trStr = ` [${boss.traits.join(", ")}]`;
+            bossNameDisplay.innerText = boss.name + trStr;
             bossNameDisplay.style.color = boss.color;
         }
     }
@@ -1289,10 +1296,24 @@ function spawnNextBoss() {
 
 function bossTakeDamage(target, amount = player.damage) {
     if (target.state === 'DYING' || target.health <= 0) return;
-    target.health -= (amount * 0.5);
+    amount *= 0.5; // Player does 1/2 damage
+    target.health -= amount;
     target.hitResonance = BOSS_HIT_RESONANCE;
     setShake(10, 0.2);
     spawnParticles(target.x + target.width/2, target.y + target.height/2, target.color, 20);
+    
+    // Spawn small XP orb from hit
+    if (Math.random() < 0.5) { // 50% chance on hit
+        xpOrbs.push({
+            x: target.x + target.width / 2,
+            y: target.y + target.height / 2,
+            vx: (Math.random() - 0.5) * 400,
+            vy: -Math.random() * 300 - 100,
+            value: 0.5,
+            homingDelay: 0.5
+        });
+    }
+
     updateHealthUI();
 
     if (player.frostRounds) {
@@ -1313,6 +1334,18 @@ function bossTakeDamage(target, amount = player.damage) {
         target.state = 'DYING';
         target.attackTimer = 2.5;
         sfx.win();
+        
+        // Final burst of XP Orbs
+        for(let i=0; i<30; i++) {
+            xpOrbs.push({
+                x: target.x + target.width / 2,
+                y: target.y + target.height / 2,
+                vx: (Math.random() - 0.5) * 600,
+                vy: -Math.random() * 500 - 200,
+                value: 1, // Larger value
+                homingDelay: 1.0 + Math.random() * 1.5 // delays homing for a scatter effect
+            });
+        }
     }
 }
 
@@ -1995,18 +2028,7 @@ function update(timestamp) {
                 } else if (!isInfiniteMode && rushIndex >= BOSS_DATA.length - 1) {
                     spawnNextBoss(); // Actually this terminates the normal run and shows win screen
                 } else {
-                    // Give XP
-                    let xpGain = 12 * (player.xpMultiplier || 1.0);
-                    currentXP += xpGain;
-                    
-                    let reqXP = Math.floor(1.8 * Math.pow(currentLevel, 2));
-                    
-                    if (currentXP >= reqXP) {
-                        currentLevel++;
-                        showUpgradeScreen();
-                    } else {
-                        spawnNextBoss();
-                    }
+                    spawnNextBoss();
                 }
             }
         }
@@ -2351,6 +2373,60 @@ function update(timestamp) {
         p.y += p.vy * dt;
         p.life -= dt;
         return p.life > 0;
+    });
+
+    // Update XP Orbs
+    xpOrbs = xpOrbs.filter(orb => {
+        orb.homingDelay -= dt;
+        
+        if (orb.homingDelay <= 0) {
+            // Home towards player
+            const dx = (player.x + player.width/2) - orb.x;
+            const dy = (player.y + player.height/2) - orb.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            
+            if (dist < player.radius + 15) {
+                // Collect
+                const xpGain = orb.value * (player.xpMultiplier || 1.0);
+                currentXP += xpGain;
+                let reqXP = Math.floor(1.8 * Math.pow(currentLevel, 2));
+                
+                if (currentXP >= reqXP) {
+                    currentLevel++;
+                    showUpgradeScreen();
+                }
+                
+                sfx.land(); // Tiny tick sound? Land works well enough
+                updateHealthUI(); // Update the XP UI as well!
+                return false;
+            }
+            
+            // Accelerated homing
+            orb.vx += (dx / dist) * 2000 * dt;
+            orb.vy += (dy / dist) * 2000 * dt;
+            
+            // Max speed limit
+            let spd = Math.sqrt(orb.vx*orb.vx + orb.vy*orb.vy);
+            if (spd > 800) {
+                orb.vx = (orb.vx/spd) * 800;
+                orb.vy = (orb.vy/spd) * 800;
+            }
+        } else {
+            // Apply gravity and drag while bursting
+            orb.vy += 800 * dt; 
+            orb.vx *= 0.95;
+        }
+        
+        // Floor collision
+        if (orb.y > canvas.height - ARENA_FLOOR) {
+            orb.y = canvas.height - ARENA_FLOOR;
+            orb.vy *= -0.6;
+        }
+
+        orb.x += orb.vx * dt;
+        orb.y += orb.vy * dt;
+        
+        return true;
     });
 
     // Update Trails
@@ -2819,6 +2895,20 @@ function draw() {
         ctx.stroke();
     });
     ctx.globalAlpha = 1;
+
+    // Draw XP Orbs
+    xpOrbs.forEach(orb => {
+        ctx.fillStyle = orb.value >= 1 ? '#00FF00' : '#80FF80'; // Minecraft EXP green
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#00FF00';
+        ctx.beginPath();
+        // Little wobbling diamonds/circles
+        let renderRad = orb.value >= 1 ? 5 : 3;
+        renderRad += Math.sin(gameTime * 20 + orb.x) * 1;
+        ctx.arc(orb.x, orb.y, renderRad, 0, Math.PI*2);
+        ctx.fill();
+    });
+    ctx.shadowBlur = 0;
     
     worldObjects.forEach(obj => {
         ctx.save();
@@ -3172,6 +3262,7 @@ function draw() {
             ctx.strokeStyle = '#000';
             ctx.lineWidth = 2;
             ctx.save();
+            ctx.shadowBlur = 0;
             const ts = b.traits;
             
             if (ts.includes('DEPRESSED')) {
