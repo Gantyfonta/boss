@@ -147,7 +147,7 @@ let randomPlatformTimer = 0;
 
 // --- BOSS FIGHT CONSTANTS ---
 const PLAYER_MAX_HEALTH_DEFAULT = 10;
-const BOSS_MAX_HEALTH = 1000; // 5x original 200 hp
+const BOSS_MAX_HEALTH = 750; // Nerfed from 1000
 let PLAYER_BULLET_SPEED = 800;
 let PLAYER_FIRE_RATE = 0.25;
 const INVULN_DURATION = 1.2;
@@ -263,7 +263,7 @@ let orbitals = [];
 
 function createCheeseLord(hpMod = 1.0, speedMod = 1.0) {
     const allAttacks = ['BURST', 'TRIPLE_SHOT', 'WAVE', 'SINE', 'BOUNCE', 'WALL_STRIKE', 'CHARGE', 'BEAM_PREP', 'MINES', 'SPIRAL', 'SLAM_PREP', 'SUMMON', 'LAVA_PREP', 'PHASE_SHIFT', 'ORBITAL_STRIKE', 'GRAVITY_WELL', 'RING_SHOCK', 'CROSS_BEAM', 'STALACTITE', 'SUMMON_MINION', 'METEOR_SHOWER', 'LASER_GRID'];
-    const allTraits = ['HOMING', 'BOOMERANG', 'RAGE', 'DEPRESSED', 'TRIUMVIRATE', 'STONE', 'SHARP', 'HEAL', 'CHILL', 'BOUNCY', 'GHOST'];
+    const allTraits = ['HOMING', 'BOOMERANG', 'RAGE', 'DEPRESSED', 'TRIUMVIRATE', 'STONE', 'SHARP', 'HEAL', 'CHILL', 'BOUNCY', 'GHOST', 'REACTIVE', 'ORBITAL', 'TELEPORT', 'TITAN', 'STATIC'];
 
     const cheese = {
         name: "Cheese Lord: The King of Chanakh",
@@ -465,6 +465,7 @@ const player = {
     health: PLAYER_MAX_HEALTH_DEFAULT,
     maxHealth: PLAYER_MAX_HEALTH_DEFAULT,
     invuln: 0,
+    radius: 15,
     bullets: [],
     fireCooldown: 0,
     damage: 10,
@@ -472,7 +473,7 @@ const player = {
 };
 
 function getTraits() {
-    const availableTraits = ['HOMING', 'BOOMERANG', 'RAGE', 'DEPRESSED', 'TRIUMVIRATE', 'STONE', 'SHARP', 'HEAL', 'CHILL', 'BOUNCY', 'GHOST'];
+    const availableTraits = ['HOMING', 'BOOMERANG', 'RAGE', 'DEPRESSED', 'TRIUMVIRATE', 'STONE', 'SHARP', 'HEAL', 'CHILL', 'BOUNCY', 'GHOST', 'REACTIVE', 'ORBITAL', 'TELEPORT', 'TITAN', 'STATIC'];
     let traits = [];
     let chosenTrait = availableTraits[Math.floor(Math.random() * availableTraits.length)];
     if (chosenTrait === 'TRIUMVIRATE') {
@@ -512,14 +513,18 @@ function createBoss(index) {
     if (traits.includes('RAGE')) {
         speedMod *= 1.5;
     }
+    if (traits.includes('TITAN')) {
+        hpMod *= 2.0;
+        speedMod *= 0.6;
+    }
     
     return {
         id: index,
         x: data.spawnX,
         y: 190,
         spawnX: data.spawnX,
-        width: 80,
-        height: 80,
+        width: 80 * (traits.includes('TITAN') ? 1.5 : 1.0),
+        height: 80 * (traits.includes('TITAN') ? 1.5 : 1.0),
         health: Math.floor(BOSS_MAX_HEALTH * hpMod),
         maxHealth: Math.floor(BOSS_MAX_HEALTH * hpMod),
         speedMod: speedMod,
@@ -1072,6 +1077,11 @@ function updateHealthUI() {
                 else if (t === 'CHILL') symbol = '❄️';
                 else if (t === 'BOUNCY') symbol = '🏀';
                 else if (t === 'GHOST') symbol = '👻';
+                else if (t === 'REACTIVE') symbol = '⚡';
+                else if (t === 'ORBITAL') symbol = '🪐';
+                else if (t === 'TELEPORT') symbol = '🌀';
+                else if (t === 'TITAN') symbol = '🐘';
+                else if (t === 'STATIC') symbol = '🌩️';
                 
                 icon.innerText = symbol;
                 traitIcons.appendChild(icon);
@@ -1445,6 +1455,20 @@ function bossTakeDamage(target, amount = player.damage) {
     if (player.frostRounds) {
         target.slowTimer = Math.min(2.0, (target.slowTimer || 0) + 0.2);
     }
+
+    if (target.traits && target.traits.includes('REACTIVE') && Math.random() < 0.25) {
+        const pdx = (player.x + player.width/2) - (target.x + target.width/2);
+        const pdy = (player.y + player.height/2) - (target.y + target.height/2);
+        const pdist = Math.sqrt(pdx*pdx + pdy*pdy);
+        if (pdist > 0) {
+            target.projectiles = target.projectiles || [];
+            target.projectiles.push({
+                x: target.x + target.width/2, y: target.y + target.height/2,
+                vx: (pdx/pdist) * 450, vy: (pdy/pdist) * 450,
+                radius: 10, life: 3, type: 'NORMAL'
+            });
+        }
+    }
     
     const phases = target.phases;
     const healthRatio = target.health / target.maxHealth;
@@ -1717,6 +1741,50 @@ function update(timestamp) {
 
         if (b.traits && b.traits.includes('DEPRESSED') && b.state !== 'DYING') {
             b.state = 'DEPRESSED';
+        }
+
+        // --- NEW TRAIT LOGIC ---
+        if (b.traits && b.traits.includes('STATIC')) {
+            b.staticTimer = (b.staticTimer || 0) + dt;
+            if (b.staticTimer > 3.0) {
+                b.staticTimer = 0;
+                for (let i = 0; i < 12; i++) {
+                    const ang = (i / 12) * Math.PI * 2;
+                    b.projectiles.push({
+                        x: b.x + b.width/2, y: b.y + b.height/2,
+                        vx: Math.cos(ang) * 300, vy: Math.sin(ang) * 300,
+                        radius: 12, life: 2, type: 'NORMAL', color: '#00d2ff'
+                    });
+                }
+            }
+        }
+        if (b.traits && b.traits.includes('ORBITAL')) {
+            if (!b.orbitPoints) {
+                b.orbitPoints = [];
+                for (let i = 0; i < 3; i++) {
+                    b.orbitPoints.push({ angle: (i/3) * Math.PI * 2 });
+                }
+            }
+            b.orbitPoints.forEach(orb => {
+                orb.angle += dt * 3;
+                const ox = b.x + b.width/2 + Math.cos(orb.angle) * (b.width * 0.8 + 20);
+                const oy = b.y + b.height/2 + Math.sin(orb.angle) * (b.width * 0.8 + 20);
+                const dx = (player.x + player.width/2) - ox;
+                const dy = (player.y + player.height/2) - oy;
+                if (Math.sqrt(dx*dx + dy*dy) < 20) playerTakeDamage();
+                
+                // Draw orbital logic (this is in update, but we should handle damage here)
+            });
+        }
+        if (b.traits && b.traits.includes('TELEPORT')) {
+            b.teleTimer = (b.teleTimer || 0) + dt;
+            if (b.teleTimer > 5.0) {
+                b.teleTimer = 0;
+                b.x = Math.random() * (canvas.width - b.width - 40) + 20;
+                b.y = Math.random() * 150 + 50;
+                setShake(10, 0.2);
+                spawnParticles(b.x + b.width/2, b.y + b.height/2, b.color, 15);
+            }
         }
 
         if (b.state === 'IDLE') {
@@ -2161,7 +2229,12 @@ function update(timestamp) {
 
         // Update Projectiles
         b.projectiles = b.projectiles.filter(p => {
-            if (p.initialLife === undefined) p.initialLife = p.life;
+            if (p.initialLife === undefined) {
+                if (b.traits && b.traits.includes('BOOMERANG')) {
+                    p.life *= 2.5; // Give more time to return
+                }
+                p.initialLife = p.life;
+            }
             if (b.traits && b.traits.includes('HOMING')) {
                 const pdx = (player.x + player.width/2) - p.x;
                 const pdy = (player.y + player.height/2) - p.y;
@@ -2181,8 +2254,8 @@ function update(timestamp) {
                     const pdy = (b.y + b.height/2) - p.y;
                     const pdist = Math.sqrt(pdx*pdx + pdy*pdy);
                     if (pdist > 0) {
-                        p.vx += (pdx/pdist) * 400 * dt;
-                        p.vy += (pdy/pdist) * 400 * dt;
+                        p.vx += (pdx/pdist) * 1200 * dt;
+                        p.vy += (pdy/pdist) * 1200 * dt;
                     }
                 }
             }
@@ -3352,6 +3425,11 @@ function draw() {
             ctx.globalAlpha = 0.5;
         }
         
+        if (b.traits && b.traits.includes('TELEPORT')) {
+            ctx.translate((Math.random()-0.5)*10, (Math.random()-0.5)*10);
+            if (Math.random() < 0.1) ctx.globalAlpha *= 0.5;
+        }
+        
         // Animation based on state (Squash, stretch, rotation)
         let stateScaleX = 1;
         let stateScaleY = 1;
@@ -3501,6 +3579,42 @@ function draw() {
                 ctx.fill();
                 ctx.fillRect(-b.width/4, b.height/4, b.width/2, b.height/4);
                 ctx.globalAlpha = 1.0;
+            }
+
+            if (ts.includes('REACTIVE')) {
+                ctx.fillStyle = '#ff4757';
+                for (let i = 0; i < 4; i++) {
+                    ctx.save();
+                    ctx.rotate(i * Math.PI / 2);
+                    ctx.fillRect(-2, -b.height/2 - 10, 4, 15);
+                    ctx.restore();
+                }
+            }
+            if (ts.includes('STATIC')) {
+                ctx.strokeStyle = '#00d2ff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const ang = (i/6) * Math.PI * 2 + gameTime * 10;
+                    ctx.moveTo(Math.cos(ang) * b.width/2, Math.sin(ang) * b.width/2);
+                    ctx.lineTo(Math.cos(ang) * (b.width/2 + 15), Math.sin(ang) * (b.width/2 + 15));
+                }
+                ctx.stroke();
+            }
+            if (ts.includes('ORBITAL')) {
+                if (b.orbitPoints) {
+                    b.orbitPoints.forEach(orb => {
+                        ctx.save();
+                        ctx.rotate(orb.angle - stateAngle); 
+                        ctx.fillStyle = '#ffa502';
+                        ctx.shadowBlur = 10;
+                        ctx.shadowColor = '#ffa502';
+                        ctx.beginPath();
+                        ctx.arc(b.width * 0.8 + 20, 0, 8, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.restore();
+                    });
+                }
             }
             
             ctx.restore();
