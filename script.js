@@ -416,13 +416,31 @@ function createBoss(index) {
     // Scale boss Health and Speed
     let hpMod = 1.0;
     let speedMod = 1.0;
+    let traits = [];
     if (isInfiniteMode) {
         hpMod = Math.pow(1.25, defeatedBossesCount);
         speedMod = Math.pow(1.10, defeatedBossesCount);
+        const availableTraits = ['HOMING', 'BOOMERANG', 'RAGE', 'DEPRESSED', 'TRIUMVIRATE', 'STONE', 'SHARP', 'HEAL', 'CHILL'];
+        let chosenTrait = availableTraits[Math.floor(Math.random() * availableTraits.length)];
+        if (chosenTrait === 'TRIUMVIRATE') {
+            traits.push('TRIUMVIRATE');
+            const subset = availableTraits.filter(t => t !== 'TRIUMVIRATE');
+            const t1 = subset.splice(Math.floor(Math.random() * subset.length), 1)[0];
+            const t2 = subset.splice(Math.floor(Math.random() * subset.length), 1)[0];
+            traits.push(t1, t2);
+        } else {
+            traits.push(chosenTrait);
+        }
     }
     if (isSandboxMode) {
         const hpVal = parseFloat(document.getElementById('sandbox-hp-val').innerText);
         if (!isNaN(hpVal)) hpMod = hpVal;
+        // Optionally assign custom traits in sandbox later
+    }
+    
+    // Apply Rage trait multiplier
+    if (traits.includes('RAGE')) {
+        speedMod *= 1.5;
     }
     
     return {
@@ -435,6 +453,7 @@ function createBoss(index) {
         health: Math.floor(BOSS_MAX_HEALTH * hpMod),
         maxHealth: Math.floor(BOSS_MAX_HEALTH * hpMod),
         speedMod: speedMod,
+        traits: traits,
         state: 'IDLE', 
         attackTimer: 2.5, // Calm start for each boss
         phase: 0,
@@ -610,6 +629,7 @@ function showTitle() {
     document.getElementById('title-screen').style.display = 'flex';
     document.getElementById('controls-screen').style.display = 'none';
     document.getElementById('admin-panel').style.display = 'none';
+    document.getElementById('credits-screen').style.display = 'none';
     const indexScreen = document.getElementById('index-screen');
     if (indexScreen) indexScreen.style.display = 'none';
     const sandboxScreen = document.getElementById('sandbox-screen');
@@ -951,7 +971,7 @@ function updateHealthUI() {
     }
 }
 
-function playerTakeDamage() {
+function playerTakeDamage(source = 'default') {
     if (player.invuln > 0 || player.health <= 0 || gameState !== 'PLAYING') return;
 
     if (player.lastStandUsed === false && player.health === 1) {
@@ -962,13 +982,27 @@ function playerTakeDamage() {
         return;
     }
     
+    // Check traits from the global boss
+    let dmgAmount = 1;
+    if (boss && boss.traits) {
+        if (boss.traits.includes('STONE')) dmgAmount = Math.floor(Math.random() * 2) + 2; // 2 or 3 damage
+        if (boss.traits.includes('SHARP')) {
+            player.bleedTimer = 6; // Take 2 further damage over 6 seconds
+        }
+        if (boss.traits.includes('HEAL')) {
+            boss.health = Math.min(boss.maxHealth, boss.health + boss.maxHealth * 0.25);
+            spawnParticles(boss.x + boss.width/2, boss.y + boss.height/2, '#2ecc71', 15);
+        }
+    }
+
     if (player.armor && Math.random() < player.armor) {
         spawnParticles(player.x + player.width/2, player.y + player.height/2, '#00d2ff', 5);
         player.invuln = 0.3; // Short invuln for "glance"
         return;
     }
 
-    player.health--;
+    player.health -= dmgAmount;
+    if (player.health < 0) player.health = 0;
     player.invuln = INVULN_DURATION;
     setShake(15, 0.3);
     sfx.land(); 
@@ -1025,6 +1059,10 @@ const UPGRADES = [
     { id: 'BERSERKER', title: 'Berserker Engine', desc: 'Fire rate up as HP drops', rarity: 'RARE', run: () => player.berserker = 1 },
     { id: 'DRONE_PILOT', title: 'Drone Mk1', desc: 'Summons a tactical drone', rarity: 'EPIC', run: () => player.drones.push({ angle: Math.random() * Math.PI * 2, fireCooldown: 0 }) },
     { id: 'FROST_ROUNDS', title: 'Cryo Core', desc: 'Bullets slow boss attacks', rarity: 'RARE', run: () => player.frostRounds += 0.5 },
+    { id: 'DRONE_PILOT_MK2', title: 'Drone Mk2', desc: 'Mk1 orbits detach & shoot 2x', rarity: 'LEGENDARY', run: () => { 
+        player.drones.forEach(d => { d.mk2 = true; }); 
+        player.dronesMk2 = true; 
+    } },
     { id: 'REACTIVE_ARMOR', title: 'Reactive Core', desc: 'Release nova when hit', rarity: 'RARE', run: () => player.reactiveArmor++ },
     { id: 'LAST_STAND', title: 'Final Protocol', desc: 'Invuln on fatal hit (1/run)', rarity: 'LEGENDARY', run: () => player.lastStandUsed = false },
     { id: 'TITAN_PLATE', title: 'Titan Plate', desc: 'Max HP +5, move speed -20%', rarity: 'RARE', run: () => { player.maxHealth += 5; player.health += 5; playerMoveSpeed *= 0.8; updateHealthUI(); } },
@@ -1044,8 +1082,14 @@ function showUpgradeScreen() {
     container.innerHTML = '';
     screen.style.display = 'flex';
     
+    // Check constraints
+    let validUpgrades = [...UPGRADES];
+    if (!player.drones || player.drones.length === 0 || player.dronesMk2) {
+        validUpgrades = validUpgrades.filter(u => u.id !== 'DRONE_PILOT_MK2');
+    }
+    
     // Pick 3 random upgrades
-    const shuffled = [...UPGRADES].sort(() => 0.5 - Math.random());
+    const shuffled = validUpgrades.sort(() => 0.5 - Math.random());
     const selection = shuffled.slice(0, 3);
     
     selection.forEach(up => {
@@ -1245,7 +1289,7 @@ function spawnNextBoss() {
 
 function bossTakeDamage(target, amount = player.damage) {
     if (target.state === 'DYING' || target.health <= 0) return;
-    target.health -= amount;
+    target.health -= (amount * 0.5);
     target.hitResonance = BOSS_HIT_RESONANCE;
     setShake(10, 0.2);
     spawnParticles(target.x + target.width/2, target.y + target.height/2, target.color, 20);
@@ -1511,6 +1555,10 @@ function update(timestamp) {
 
         let effectiveDt = dt;
         if (b.slowTimer > 0) effectiveDt *= 0.6;
+
+        if (b.traits && b.traits.includes('DEPRESSED') && b.state !== 'DYING') {
+            b.state = 'DEPRESSED';
+        }
 
         if (b.state === 'IDLE') {
             b.attackTimer -= effectiveDt;
@@ -1933,6 +1981,11 @@ function update(timestamp) {
                 b.state = 'IDLE';
                 b.attackTimer = 1.0;
             }
+        } else if (b.state === 'DEPRESSED') {
+            b.targetY = canvas.height - ARENA_FLOOR - b.height;
+            b.y += (b.targetY - b.y) * dt * 5;
+            b.x += (b.spawnX - b.x) * dt * 2;
+            if (Math.random() < 0.05) spawnParticles(b.x + Math.random()*b.width, b.y, '#00d2ff', 1); // tears
         } else if (b.state === 'DYING') {
             b.attackTimer -= dt;
             spawnParticles(b.x + Math.random()*b.width, b.y + Math.random()*b.height, b.color, 2);
@@ -1960,6 +2013,27 @@ function update(timestamp) {
 
         // Update Projectiles
         b.projectiles = b.projectiles.filter(p => {
+            if (p.initialLife === undefined) p.initialLife = p.life;
+            if (b.traits && b.traits.includes('HOMING')) {
+                const pdx = (player.x + player.width/2) - p.x;
+                const pdy = (player.y + player.height/2) - p.y;
+                const pdist = Math.sqrt(pdx*pdx + pdy*pdy);
+                if (pdist > 0) {
+                    p.vx += (pdx/pdist) * 200 * dt;
+                    p.vy += (pdy/pdist) * 200 * dt;
+                }
+            } else if (b.traits && b.traits.includes('BOOMERANG')) {
+                if (p.life < p.initialLife * 0.6) {
+                    const pdx = (b.x + b.width/2) - p.x;
+                    const pdy = (b.y + b.height/2) - p.y;
+                    const pdist = Math.sqrt(pdx*pdx + pdy*pdy);
+                    if (pdist > 0) {
+                        p.vx += (pdx/pdist) * 400 * dt;
+                        p.vy += (pdy/pdist) * 400 * dt;
+                    }
+                }
+            }
+
             if (p.type === 'SINE') {
                 const elapsed = gameTime - p.time;
                 const lateralX = -p.vy;
@@ -2288,6 +2362,22 @@ function update(timestamp) {
 
     if (player.invuln > 0) player.invuln -= dt;
     if (player.fireCooldown > 0) player.fireCooldown -= dt;
+    
+    if (player.bleedTimer > 0) {
+        let prevTick = Math.ceil(player.bleedTimer / 3);
+        player.bleedTimer -= dt;
+        let currTick = Math.ceil(player.bleedTimer / 3);
+        // Will deal damage at 3 secs and 0 secs remaining
+        if (currTick < prevTick && currTick >= 0) {
+            let tmpInvuln = player.invuln;
+            player.invuln = 0; // bypass invuln
+            player.health = Math.max(0, player.health - 1);
+            player.invuln = tmpInvuln;
+            spawnParticles(player.x + player.width/2, player.y + player.height/2, '#ff0000', 10);
+            updateHealthUI();
+            if (player.health === 0) playerTakeDamage(); // Trigger last stand or death
+        }
+    }
 
     // Update Sword
     if (player.weaponType === 'SWORD' && player.isSwinging) {
@@ -2361,21 +2451,39 @@ function update(timestamp) {
     // Drone Update
     if (player.drones && player.drones.length > 0) {
         player.drones.forEach(d => {
-            d.angle += dt * 2;
-            d.x = player.x + player.width/2 + Math.cos(d.angle) * 60;
-            d.y = player.y + player.height/2 + Math.sin(d.angle) * 60;
+            if (d.mk2) {
+                // Free flying drone logic
+                if (!d.vx) d.vx = 0;
+                if (!d.vy) d.vy = 0;
+                if (!d.targetX || Math.random() < 0.05) {
+                    d.targetX = player.x + (Math.random() - 0.5) * 300;
+                    d.targetY = player.y + (Math.random() - 0.5) * 200 - 100;
+                }
+                const dx = d.targetX - d.x;
+                const dy = d.targetY - d.y;
+                d.vx += dx * dt * 2;
+                d.vy += dy * dt * 2;
+                d.vx *= 0.95; d.vy *= 0.95;
+                d.x += d.vx * dt;
+                d.y += d.vy * dt;
+            } else {
+                d.angle += dt * 2;
+                d.x = player.x + player.width/2 + Math.cos(d.angle) * 60;
+                d.y = player.y + player.height/2 + Math.sin(d.angle) * 60;
+            }
             d.fireCooldown -= dt;
             if (d.fireCooldown <= 0 && boss && boss.health > 0) {
                 const dx = (boss.x + boss.width/2) - d.x;
                 const dy = (boss.y + boss.height/2) - d.y;
                 const ang = Math.atan2(dy, dx);
-                player.bullets.push({
-                    x: d.x, y: d.y,
-                    vx: Math.cos(ang) * PLAYER_BULLET_SPEED,
-                    vy: Math.sin(ang) * PLAYER_BULLET_SPEED,
-                    radius: 4, life: 2, damageScale: 0.3
-                });
-                d.fireCooldown = 0.5;
+                if (d.mk2) {
+                    player.bullets.push({x: d.x, y: d.y, vx: Math.cos(ang-0.1) * PLAYER_BULLET_SPEED, vy: Math.sin(ang-0.1) * PLAYER_BULLET_SPEED, radius: 4, life: 2, damageScale: 0.3});
+                    player.bullets.push({x: d.x, y: d.y, vx: Math.cos(ang+0.1) * PLAYER_BULLET_SPEED, vy: Math.sin(ang+0.1) * PLAYER_BULLET_SPEED, radius: 4, life: 2, damageScale: 0.3});
+                    d.fireCooldown = 0.3;
+                } else {
+                    player.bullets.push({x: d.x, y: d.y, vx: Math.cos(ang) * PLAYER_BULLET_SPEED, vy: Math.sin(ang) * PLAYER_BULLET_SPEED, radius: 4, life: 2, damageScale: 0.3});
+                    d.fireCooldown = 0.5;
+                }
             }
         });
     }
@@ -2992,6 +3100,27 @@ function draw() {
         
         if (b.state === 'DYING') ctx.globalAlpha = Math.random();
         
+        // Animation based on state (Squash, stretch, rotation)
+        let stateScaleX = 1;
+        let stateScaleY = 1;
+        let stateAngle = 0;
+        
+        if (b.state === 'BURST' || b.state === 'SLAM_PREP' || b.state === 'CHARGE') {
+            stateScaleX = 1.2;
+            stateScaleY = 0.8;
+            if (b.state === 'SLAM_PREP' && b.attackTimer < 0.5) stateScaleY = 1.5;
+        } else if (b.state === 'TRIPLE_SHOT' || b.state === 'SINE') {
+            stateScaleX = 0.9;
+            stateScaleY = 1.1;
+        } else if (b.state === 'WAVE' || b.state === 'SPIRAL') {
+            stateAngle = gameTime * 5;
+        } else if (b.state === 'BOUNCE' || b.state === 'DEPRESSED') {
+            stateScaleX = 1.3;
+            stateScaleY = 0.7;
+        }
+
+        ctx.rotate(stateAngle);
+
         // Hit resonance flash
         if (b.hitResonance > 0) {
             ctx.fillStyle = '#fff';
@@ -3003,13 +3132,79 @@ function draw() {
 
         // Rhythmic Core
         const scale = 1 + Math.sin(gameTime * 5) * 0.1;
-        ctx.scale(scale, scale);
+        ctx.scale(scale * stateScaleX, scale * stateScaleY);
         
         ctx.fillRect(-b.width/2, -b.height/2, b.width, b.height);
         
         // Inner flair and visual state adjustments
         ctx.fillStyle = b.state === 'BEAM_PREP' || b.state === 'BEAM_FIRE' ? (b === boss ? '#00d2ff' : '#ffa502') : '#fff';
         ctx.fillRect(-b.width/4, -b.height/4, b.width/2, b.height/2);
+
+        // Traits Face visuals
+        if (b.traits) {
+            ctx.fillStyle = '#000';
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.save();
+            const ts = b.traits;
+            
+            if (ts.includes('DEPRESSED')) {
+                ctx.beginPath();
+                ctx.arc(-b.width/6, -b.height/6, 3, 0, Math.PI, true);
+                ctx.arc(b.width/6, -b.height/6, 3, 0, Math.PI, true);
+                ctx.stroke();
+                ctx.fillStyle = '#00d2ff'; // tear
+                ctx.fillRect(-b.width/6, 0, 3, 6);
+                ctx.fillRect(b.width/6, 2, 3, 6);
+            } else if (ts.includes('TRIUMVIRATE')) {
+                ctx.beginPath();
+                ctx.arc(-b.width/5, -b.height/6, 4, 0, Math.PI*2);
+                ctx.arc(b.width/5, -b.height/6, 4, 0, Math.PI*2);
+                ctx.arc(0, -b.height/3, 4, 0, Math.PI*2);
+                ctx.fill();
+            } else if (ts.includes('RAGE')) {
+                ctx.beginPath();
+                ctx.moveTo(-b.width/4, -b.height/3); ctx.lineTo(-b.width/8, -b.height/6);
+                ctx.moveTo(b.width/4, -b.height/3); ctx.lineTo(b.width/8, -b.height/6);
+                ctx.stroke();
+                ctx.fillRect(-b.width/6, -b.height/5, 4, 4);
+                ctx.fillRect(b.width/6 - 4, -b.height/5, 4, 4);
+            } else if (ts.includes('HOMING')) {
+                ctx.beginPath();
+                ctx.arc(-b.width/6, -b.height/8, 5, 0, Math.PI*2);
+                ctx.arc(b.width/6, -b.height/8, 5, 0, Math.PI*2);
+                ctx.stroke();
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(-b.width/6 - 1, -b.height/8 - 1, 2, 2);
+                ctx.fillRect(b.width/6 - 1, -b.height/8 - 1, 2, 2);
+            } else if (ts.includes('BOOMERANG')) {
+                ctx.beginPath();
+                ctx.arc(-b.width/6, -b.height/8, 5, 0, Math.PI, true);
+                ctx.arc(b.width/6, -b.height/8, 5, 0, Math.PI, true);
+                ctx.stroke();
+            } else if (ts.includes('STONE')) {
+                ctx.fillStyle = '#555';
+                ctx.fillRect(-b.width/6, -b.height/6, 6, 6);
+                ctx.fillRect(b.width/6 - 6, -b.height/6, 6, 6);
+                ctx.fillRect(-b.width/4, b.height/8, b.width/2, 4);
+            } else if (ts.includes('SHARP')) {
+                ctx.beginPath();
+                ctx.moveTo(-b.width/6, -b.height/6); ctx.lineTo(-b.width/8, -b.height/4); ctx.lineTo(-b.width/10, -b.height/6);
+                ctx.moveTo(b.width/6, -b.height/6); ctx.lineTo(b.width/8, -b.height/4); ctx.lineTo(b.width/10, -b.height/6);
+                ctx.fill();
+            } else if (ts.includes('HEAL')) {
+                ctx.fillStyle = '#2ecc71';
+                ctx.fillRect(-b.width/6, -b.height/6 - 2, 4, 8);
+                ctx.fillRect(-b.width/6 - 2, -b.height/6, 8, 4);
+                ctx.fillRect(b.width/6, -b.height/6 - 2, 4, 8);
+                ctx.fillRect(b.width/6 - 2, -b.height/6, 8, 4);
+            } else if (ts.includes('CHILL')) {
+                ctx.fillStyle = '#000';
+                ctx.fillRect(-b.width/3, -b.height/4, b.width*0.66, 8);
+            }
+            
+            ctx.restore();
+        }
 
         // State-specific visual changes
         ctx.save();
