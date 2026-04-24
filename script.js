@@ -217,11 +217,13 @@ const BOSS_DATA = [
     { name: 'OMEGA CORE', color: '#9b59b6', phases: OMEGA_PHASES, spawnX: 400 }
 ];
 
-let rushIndex = 0; // Current boss in the rush (0 to 3)
+let rushIndex = 0; // Current boss in the rush (0 to BOSS_DATA.length-1)
 let mouseX = 100;
 let mouseY = 300;
 let isMouseDown = false;
 let isShootKeyDown = false;
+let currentLevel = 1;
+let currentXP = 0;
 
 // --- JUICE & POLISH ---
 let particles = [];
@@ -555,6 +557,9 @@ function startGame() {
     document.getElementById('controls-screen').style.display = 'none';
     document.getElementById('win-screen').style.display = 'none';
     document.getElementById('ui').style.display = 'block';
+    
+    currentLevel = 1;
+    currentXP = 0;
     
     updateSettingsUI();
     sfx.click();
@@ -924,6 +929,26 @@ function updateHealthUI() {
         rushCounter.style.color = boss.color;
         rushCounter.style.opacity = 0.6;
     }
+    
+    // XP UI update
+    const xpContainer = document.getElementById('xp-container');
+    const xpBar = document.getElementById('xp-bar');
+    const xpLevel = document.getElementById('xp-level');
+    
+    if (xpContainer && xpBar && xpLevel) {
+        if (gameState === 'PLAYING') {
+            xpContainer.style.display = 'block';
+            xpLevel.innerText = currentLevel;
+            let reqXP = Math.floor(1.8 * Math.pow(currentLevel, 2));
+            let prevReqXP = currentLevel > 1 ? Math.floor(1.8 * Math.pow(currentLevel - 1, 2)) : 0;
+            let currentLevelProgress = currentXP - prevReqXP;
+            let currentLevelReq = reqXP - prevReqXP;
+            let xpPercent = Math.min(100, (currentLevelProgress / currentLevelReq) * 100);
+            xpBar.style.width = Math.max(0, xpPercent) + '%';
+        } else {
+            xpContainer.style.display = 'none';
+        }
+    }
 }
 
 function playerTakeDamage() {
@@ -1008,7 +1033,8 @@ const UPGRADES = [
     { id: 'SCATTERGUN', title: 'Scatter Core', desc: '+3 Projectiles, -40% DMG', rarity: 'EPIC', run: () => { player.multishot += 3; player.damage = Math.max(1, player.damage * 0.6); } },
     { id: 'WHIRLWIND', title: 'Whirlwind', desc: 'Attacks hit all around you', rarity: 'LEGENDARY', run: () => { player.whirlwind = true; } },
     { id: 'THROWING_SWORD', title: 'Spectral Blade', desc: 'Throw swords like bullets. Enables Gun cards!', rarity: 'LEGENDARY', run: () => { player.throwingSword = true; } },
-    { id: 'VAMPIRIC_STRIKE', title: 'Vampiric Edge', desc: 'High lifesteal, Max HP -2', rarity: 'EPIC', run: () => { player.lifesteal = (player.lifesteal || 0) + 0.1; player.maxHealth = Math.max(1, player.maxHealth - 2); player.health = Math.min(player.health, player.maxHealth); updateHealthUI(); } }
+    { id: 'VAMPIRIC_STRIKE', title: 'Vampiric Edge', desc: 'High lifesteal, Max HP -2', rarity: 'EPIC', run: () => { player.lifesteal = (player.lifesteal || 0) + 0.1; player.maxHealth = Math.max(1, player.maxHealth - 2); player.health = Math.min(player.health, player.maxHealth); updateHealthUI(); } },
+    { id: 'XP_BOOST', title: 'Core Extractor', desc: 'Bosses grant +25% more XP', rarity: 'LEGENDARY', run: () => { player.xpMultiplier = (player.xpMultiplier || 1.0) + 0.25; } }
 ];
 
 function showUpgradeScreen() {
@@ -1117,12 +1143,37 @@ window.showSandbox = function() {
     // Populate Attacks
     const atkList = document.getElementById('sandbox-attacks-list');
     atkList.innerHTML = '';
-    const pool = ['BURST', 'TRIPLE_SHOT', 'WAVE', 'SINE', 'BOUNCE', 'WALL_STRIKE', 'CHARGE', 'BEAM_PREP', 'MINES', 'SPIRAL', 'SLAM_PREP', 'SUMMON', 'LAVA_PREP', 'PHASE_SHIFT', 'ORBITAL_STRIKE', 'GRAVITY_WELL', 'RING_SHOCK', 'CROSS_BEAM', 'STALACTITE', 'SUMMON_MINION', 'METEOR_SHOWER', 'LASER_GRID'];
-    pool.forEach(a => {
+    const attackDescs = {
+        'BURST': 'Fires a fast shotgun blast of bullets',
+        'TRIPLE_SHOT': 'Fires 3 continuous targeted shots',
+        'WAVE': 'Fires an expanding wave of bullets',
+        'SINE': 'Shoots waving, oscillating streams',
+        'BOUNCE': 'Fires large bouncing energy orbs',
+        'WALL_STRIKE': 'Summons a barrier that closes in',
+        'CHARGE': 'Boss dashes rapidly at the player',
+        'BEAM_PREP': 'Charges and fires a massive continuous death ray',
+        'MINES': 'Scatters explosive proximity mines',
+        'SPIRAL': 'Spins and unleashes a bullet hell spiral',
+        'SLAM_PREP': 'Leaps into the air and slams down heavily',
+        'SUMMON': 'Spawns small minion enemies',
+        'LAVA_PREP': 'Floods the lower arena with burning lava',
+        'PHASE_SHIFT': 'Teleports rapidly and turns translucent',
+        'ORBITAL_STRIKE': 'Calls down explosive pillars of light',
+        'GRAVITY_WELL': 'Generates a pull that sucks the player in',
+        'RING_SHOCK': 'Flashes rings that pulse outwards',
+        'CROSS_BEAM': 'Creates intercepting laser grid lines',
+        'STALACTITE': 'Drops debris from the ceiling',
+        'SUMMON_MINION': 'Calls a specialized minion to assist',
+        'METEOR_SHOWER': 'Calls down a rain of diagonal meteor strikes',
+        'LASER_GRID': 'Flashes horizontal and vertical instant death beams'
+    };
+    
+    Object.keys(attackDescs).forEach(a => {
         const lbl = document.createElement('label');
         lbl.style.display = 'flex';
         lbl.style.alignItems = 'center';
         lbl.style.gap = '5px';
+        lbl.title = attackDescs[a]; // Add tooltip for hover
         lbl.innerHTML = `<input type="checkbox" value="${a}" class="sandbox-atk-cb" checked> <span>${a}</span>`;
         atkList.appendChild(lbl);
     });
@@ -1327,7 +1378,20 @@ function shoot(bonusCharge = 0) {
     setShake(2 + bonusCharge * 8, 0.05);
 }
 
+let creditSequence = "";
+
 window.addEventListener('keydown', (e) => {
+    // Hidden Credits logic
+    if (gameState === 'TITLE' && e.key.length === 1) {
+        creditSequence += e.key.toUpperCase();
+        if (creditSequence.length > 6) creditSequence = creditSequence.substring(creditSequence.length - 6);
+        if (creditSequence === 'CREDIT') {
+            document.getElementById('title-screen').style.display = 'none';
+            document.getElementById('credits-screen').style.display = 'flex';
+            creditSequence = "";
+        }
+    }
+
     if (remappingKey) {
         controls[remappingKey] = e.code;
         const btn = document.getElementById(`key-${remappingKey}`);
@@ -1875,10 +1939,21 @@ function update(timestamp) {
             if (b.attackTimer <= 0) {
                 if (isSandboxMode) {
                     nextLevel(); // End sandbox run
-                } else if (isInfiniteMode || rushIndex < BOSS_DATA.length - 1) {
-                    showUpgradeScreen();
+                } else if (!isInfiniteMode && rushIndex >= BOSS_DATA.length - 1) {
+                    spawnNextBoss(); // Actually this terminates the normal run and shows win screen
                 } else {
-                    spawnNextBoss();
+                    // Give XP
+                    let xpGain = 12 * (player.xpMultiplier || 1.0);
+                    currentXP += xpGain;
+                    
+                    let reqXP = Math.floor(1.8 * Math.pow(currentLevel, 2));
+                    
+                    if (currentXP >= reqXP) {
+                        currentLevel++;
+                        showUpgradeScreen();
+                    } else {
+                        spawnNextBoss();
+                    }
                 }
             }
         }
@@ -2929,11 +3004,92 @@ function draw() {
         // Rhythmic Core
         const scale = 1 + Math.sin(gameTime * 5) * 0.1;
         ctx.scale(scale, scale);
+        
         ctx.fillRect(-b.width/2, -b.height/2, b.width, b.height);
         
-        // Inner Core
+        // Inner flair and visual state adjustments
         ctx.fillStyle = b.state === 'BEAM_PREP' || b.state === 'BEAM_FIRE' ? (b === boss ? '#00d2ff' : '#ffa502') : '#fff';
         ctx.fillRect(-b.width/4, -b.height/4, b.width/2, b.height/2);
+
+        // State-specific visual changes
+        ctx.save();
+        if (b.state === 'BURST') {
+            const charge = 1.5 - b.attackTimer; 
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(0, 0, b.width * (0.5 + charge), 0, Math.PI * 2);
+            ctx.stroke();
+        } else if (b.state === 'TRIPLE_SHOT') {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.beginPath();
+            ctx.moveTo(0, -b.height/2 - 10);
+            ctx.lineTo(-20, -b.height/2 - 30);
+            ctx.lineTo(20, -b.height/2 - 30);
+            ctx.fill();
+        } else if (b.state === 'WAVE' || b.state === 'SPIRAL') {
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            const timeAng = gameTime * 10;
+            for(let i=0; i<3; i++) {
+                ctx.arc(0, 0, b.width/2 + 10 + i*5, timeAng + i, timeAng + i + Math.PI);
+            }
+            ctx.stroke();
+        } else if (b.state === 'SINE') {
+            ctx.strokeStyle = 'cyan';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for(let i = -b.width/2; i <= b.width/2; i+=5) {
+                ctx.lineTo(i, Math.sin(gameTime * 20 + i*0.2) * 20);
+            }
+            ctx.stroke();
+        } else if (b.state === 'BOUNCE') {
+            ctx.fillStyle = '#00d2ff';
+            ctx.fillRect(-b.width/3, -b.height/3 - Math.sin(gameTime*20)*10, b.width/1.5, b.height/1.5);
+        } else if (b.state === 'WALL_STRIKE' || b.state === 'LASER_GRID' || b.state === 'CROSS_BEAM') {
+            ctx.strokeStyle = 'yellow';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.moveTo(0, -b.height); ctx.lineTo(0, b.height);
+            ctx.moveTo(-b.width, 0); ctx.lineTo(b.width, 0);
+            ctx.stroke();
+        } else if (b.state === 'CHARGE' || b.state === 'SLAM_PREP' || b.state === 'SLAM') {
+            ctx.strokeStyle = '#ff4757';
+            ctx.lineWidth = Math.random() * 5 + 2;
+            ctx.strokeRect(-b.width/2 - 10, -b.height/2 - 10, b.width + 20, b.height + 20);
+        } else if (b.state === 'MINES' || b.state === 'SUMMON' || b.state === 'SUMMON_MINION') {
+            // Draw a magic wand!
+            ctx.save();
+            ctx.rotate(Math.sin(gameTime * 10) * 0.5);
+            ctx.fillStyle = '#8e44ad';
+            ctx.fillRect(b.width/2, -b.height/2, 5, 40);
+            ctx.fillStyle = '#f1c40f';
+            ctx.beginPath();
+            ctx.arc(b.width/2 + 2.5, -b.height/2, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        } else if (b.state === 'LAVA_PREP' || b.state === 'METEOR_SHOWER' || b.state === 'STALACTITE') {
+            ctx.fillStyle = '#e67e22';
+            ctx.beginPath();
+            ctx.moveTo(0, -b.height/2 - 20 - Math.random() * 10);
+            ctx.lineTo(-15, -b.height/2);
+            ctx.lineTo(15, -b.height/2);
+            ctx.fill();
+        } else if (b.state === 'GRAVITY_WELL' || b.state === 'MAGNET' || b.state === 'RING_SHOCK') {
+            ctx.strokeStyle = '#a29bfe';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(0, 0, b.width/2 + Math.abs(Math.sin(gameTime*5))*20, 0, Math.PI * 2);
+            ctx.stroke();
+        } else if (b.state === 'PHASE_SHIFT' || b.state === 'ORBITAL_STRIKE') {
+            ctx.globalAlpha = 0.5 + Math.sin(gameTime*20)*0.5;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(-b.width, -b.height, b.width*2, b.height*2);
+            ctx.globalAlpha = 1.0;
+        }
+
+        ctx.restore();
         
         ctx.restore();
 

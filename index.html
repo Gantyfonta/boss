@@ -34,6 +34,12 @@
                 <div id="boss-health-bar"></div>
                 <div id="boss-name" style="font-size: 10px; color: rgba(255,255,255,0.5); text-align: right; margin-top: 2px; text-transform: uppercase; letter-spacing: 1px;">ALPHA CORE</div>
             </div>
+            <div id="xp-container" style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: 400px; max-width: 80vw; display: none;">
+                <div style="font-size: 10px; color: #a29bfe; font-weight: bold; margin-bottom: 2px; text-align: center; letter-spacing: 1px;">LEVEL <span id="xp-level">1</span></div>
+                <div style="width: 100%; background: rgba(0,0,0,0.5); height: 6px; border-radius: 3px; overflow: hidden; border: 1px solid rgba(162, 155, 254, 0.3);">
+                    <div id="xp-bar" style="width: 0%; height: 100%; background: #a29bfe; box-shadow: 0 0 10px #a29bfe; transition: width 0.3s ease;"></div>
+                </div>
+            </div>
         </div>
 
         <!-- Inventory Menu -->
@@ -134,6 +140,17 @@
             <button onclick="showTitle()">Back</button>
         </div>
 
+        <!-- Credits Screen -->
+        <div id="credits-screen" class="overlay" style="display: none; background: rgba(0, 0, 0, 0.95);">
+            <h3>CREDITS</h3>
+            <div style="font-size: 14px; text-align: left; max-width: 500px; display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px; line-height: 1.5;">
+                <p><strong>M.T.</strong> - Playtester.</p>
+                <p><strong>Magister Cornish</strong> - Playtesting on the projector screen, both giving feedback and advertising the game.</p>
+                <p><strong>A.A.</strong> - Hating on the game for me only to make it better.</p>
+            </div>
+            <button onclick="showTitle()" style="background: #e67e22; box-shadow: 0 4px #d35400;">Back</button>
+        </div>
+        
         <!-- Win Screen -->
         <div id="win-screen" class="overlay" style="display: none;">
             <h2>VICTORY!</h2>
