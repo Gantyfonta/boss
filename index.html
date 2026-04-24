@@ -28,11 +28,13 @@
                 <div id="timer-display">00:00.00</div>
                 <div style="width: 100px; text-align: right;">
                     <button onclick="toggleInventory()" style="padding: 4px 8px; font-size: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: white; cursor: pointer;">INVENTORY [TAB]</button>
+                    <div id="boss-traits-display" style="color: rgba(255,255,255,0.6); font-size: 9px; text-align: right; margin-top: 4px; text-transform: uppercase; line-height: 1.2;"></div>
                 </div> 
             </div>
             <div id="boss-health-container">
                 <div id="boss-health-bar"></div>
                 <div id="boss-name" style="font-size: 10px; color: rgba(255,255,255,0.5); text-align: right; margin-top: 2px; text-transform: uppercase; letter-spacing: 1px;">ALPHA CORE</div>
+                <div id="boss-trait-icons" style="display: flex; gap: 4px; justify-content: flex-end; margin-top: 2px;"></div>
             </div>
         </div>
         <div id="xp-container" style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: 400px; max-width: 80vw; display: none; pointer-events: none;">
@@ -54,7 +56,7 @@
         <!-- Title Screen -->
         <div id="title-screen" class="overlay">
             <h1>UNTITLED BOSS FIGHT</h1>
-            <p>The Final Encounter</p>
+            <p>The Cheesiest Update</p>
             <div class="menu-buttons">
                 <button onclick="startGame()">Start Battle</button>
                 <div style="display: flex; gap: 10px;">
@@ -105,6 +107,9 @@
                     <div id="sandbox-attacks-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 12px;">
                         <!-- Filled by JS -->
                     </div>
+                    <label style="display: block; margin-top: 15px; color: #f1c40f; font-weight: bold; font-size: 14px;">
+                        <input type="checkbox" id="sandbox-cheeselord"> Is Cheese Lord
+                    </label>
                 </div>
             </div>
             <div style="display: flex; gap: 10px; margin-top: auto;">

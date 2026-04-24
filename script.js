@@ -78,6 +78,8 @@ const ctx = canvas.getContext('2d');
 canvas.width = 800;
 canvas.height = 400;
 
+const ARENA_FLOOR = 20;
+
 // --- 1. SETTINGS & VARIABLES ---
 let mobileMode = localStorage.getItem('platformer_mobile') === 'true';
 let sfxEnabled = localStorage.getItem('platformer_sfx') !== 'false';
@@ -258,6 +260,62 @@ function setShake(amount, duration) {
 
 let explosions = [];
 let orbitals = [];
+
+function createCheeseLord(hpMod = 1.0, speedMod = 1.0) {
+    const allAttacks = ['BURST', 'TRIPLE_SHOT', 'WAVE', 'SINE', 'BOUNCE', 'WALL_STRIKE', 'CHARGE', 'BEAM_PREP', 'MINES', 'SPIRAL', 'SLAM_PREP', 'SUMMON', 'LAVA_PREP', 'PHASE_SHIFT', 'ORBITAL_STRIKE', 'GRAVITY_WELL', 'RING_SHOCK', 'CROSS_BEAM', 'STALACTITE', 'SUMMON_MINION', 'METEOR_SHOWER', 'LASER_GRID'];
+    const allTraits = ['HOMING', 'BOOMERANG', 'RAGE', 'DEPRESSED', 'TRIUMVIRATE', 'STONE', 'SHARP', 'HEAL', 'CHILL', 'BOUNCY', 'GHOST'];
+
+    const cheese = {
+        name: "Cheese Lord: The King of Chanakh",
+        color: "#f1c40f",
+        width: 120, height: 120,
+        x: canvas.width / 2 - 60, y: 180,
+        spawnX: canvas.width / 2 - 60,
+        velY: 0,
+        health: Math.floor(BOSS_MAX_HEALTH * hpMod * 2), // beefier
+        maxHealth: Math.floor(BOSS_MAX_HEALTH * hpMod * 2),
+        speedMod: speedMod,
+        state: 'IDLE',
+        attackTimer: 2.0,
+        projectiles: [],
+        seekers: [],
+        mines: [],
+        hitResonance: 0,
+        phases: [
+            { threshold: 1.0, attacks: allAttacks }
+        ],
+        phase: 0,
+        traits: allTraits,
+        isCheeseLord: true,
+        minions: []
+    };
+
+    // Sub-modules to run additional attacks simultaneously
+    for(let i=0; i<2; i++) {
+        cheese.minions.push({
+            name: "Cheese Lord Sub",
+            color: "transparent",
+            width: 1, height: 1,
+            x: cheese.x, y: cheese.y,
+            spawnX: cheese.x,
+            velY: 0,
+            health: 999999, maxHealth: 999999,
+            speedMod: speedMod,
+            state: 'IDLE',
+            attackTimer: 2.0 + Math.random() * 2,
+            projectiles: [],
+            seekers: [],
+            mines: [],
+            hitResonance: 0,
+            phases: [ { threshold: 1.0, attacks: allAttacks } ],
+            phase: 0,
+            isInvulnerable: true, 
+            isCheeseSub: true
+        });
+    }
+
+    return cheese;
+}
 
 function createInfiniteBoss() {
     const colors = ['#f1c40f', '#e67e22', '#e74c3c', '#9b59b6', '#3498db', '#1abc9c', '#2ecc71', '#ff4757', '#a29bfe', '#ffa502'];
@@ -900,20 +958,24 @@ function initLevel() {
     } else if (isSandboxMode) {
         const hpScale = parseFloat(document.getElementById('sandbox-hp').value) || 1.0;
         const color = '#9b59b6';
-        boss = {
-            id: -2,
-            x: 400, y: 150, spawnX: 400,
-            width: 80, height: 80,
-            health: BOSS_MAX_HEALTH * hpScale,
-            maxHealth: BOSS_MAX_HEALTH * hpScale,
-            state: 'IDLE', attackTimer: 2.0, phase: 0,
-            color: color, name: 'SANDBOX CORE',
-            targetX: 400, targetY: 150,
-            projectiles: [], mines: [], seekers: [], minions: [],
-            beam: { active: false, x1: 0, y1: 0, x2: 0, y2: 0, width: 0, timer: 0 },
-            lastSpiralTick: 0, hitResonance: 0, slowTimer: 0,
-            phases: [{ threshold: 1.0, attacks: sandboxAttacks }]
-        };
+        if (document.getElementById('sandbox-cheeselord') && document.getElementById('sandbox-cheeselord').checked) {
+            boss = createCheeseLord(hpScale, 1.0);
+        } else {
+            boss = {
+                id: -2,
+                x: 400, y: 150, spawnX: 400,
+                width: 80, height: 80,
+                health: BOSS_MAX_HEALTH * hpScale,
+                maxHealth: BOSS_MAX_HEALTH * hpScale,
+                state: 'IDLE', attackTimer: 2.0, phase: 0,
+                color: color, name: 'SANDBOX CORE',
+                targetX: 400, targetY: 150,
+                projectiles: [], mines: [], seekers: [], minions: [],
+                beam: { active: false, x1: 0, y1: 0, x2: 0, y2: 0, width: 0, timer: 0 },
+                lastSpiralTick: 0, hitResonance: 0, slowTimer: 0,
+                phases: [{ threshold: 1.0, attacks: sandboxAttacks }]
+            };
+        }
     } else {
         boss = createBoss(0);
     }
@@ -955,6 +1017,55 @@ function updateHealthUI() {
         rushCounter.innerText = `BOSS ${rushIndex + 1} OF ${BOSS_DATA.length}`;
         rushCounter.style.color = boss.color;
         rushCounter.style.opacity = 0.6;
+    }
+
+    const traitsDisplay = document.getElementById('boss-traits-display');
+    const traitIcons = document.getElementById('boss-trait-icons');
+    
+    if (traitsDisplay && boss && boss.health > 0) {
+        if (boss.traits && boss.traits.length > 0) {
+            traitsDisplay.innerHTML = "BOSS TRAITS:<br>" + boss.traits.map(t => `<span style="color: white; font-weight: bold;">${t}</span>`).join('<br>');
+        } else {
+            traitsDisplay.innerHTML = '';
+        }
+    } else if (traitsDisplay) {
+        traitsDisplay.innerHTML = '';
+    }
+
+    if (traitIcons) {
+        traitIcons.innerHTML = '';
+        if (boss && boss.traits && boss.health > 0) {
+            boss.traits.forEach(t => {
+                const icon = document.createElement('div');
+                icon.style.width = '14px';
+                icon.style.height = '14px';
+                icon.style.borderRadius = '3px';
+                icon.style.fontSize = '10px';
+                icon.style.display = 'flex';
+                icon.style.alignItems = 'center';
+                icon.style.justifyContent = 'center';
+                icon.style.background = 'rgba(255,255,255,0.15)';
+                icon.style.color = 'white';
+                icon.style.border = '1px solid rgba(255,255,255,0.1)';
+                icon.title = t;
+                
+                let symbol = t[0]; 
+                if (t === 'DEPRESSED') symbol = '😢';
+                else if (t === 'TRIUMVIRATE') symbol = '👁️';
+                else if (t === 'RAGE') symbol = '💢';
+                else if (t === 'HOMING') symbol = '🎯';
+                else if (t === 'BOOMERANG') symbol = '🪃';
+                else if (t === 'STONE') symbol = '🪨';
+                else if (t === 'SHARP') symbol = '⚔️';
+                else if (t === 'HEAL') symbol = '➕';
+                else if (t === 'CHILL') symbol = '❄️';
+                else if (t === 'BOUNCY') symbol = '🏀';
+                else if (t === 'GHOST') symbol = '👻';
+                
+                icon.innerText = symbol;
+                traitIcons.appendChild(icon);
+            });
+        }
     }
     
     // XP UI update
@@ -1064,7 +1175,7 @@ const UPGRADES = [
     { id: 'EXPLOSIVE', title: 'Nitro Core', desc: 'Bullets explode on hit', rarity: 'EPIC', run: () => player.explosive = (player.explosive || 0) + 1 },
     { id: 'SPLIT_SHOT', title: 'Fission Shell', desc: 'Bullets split on hit', rarity: 'EPIC', run: () => player.splitting = (player.splitting || 0) + 1 },
     { id: 'BERSERKER', title: 'Berserker Engine', desc: 'Fire rate up as HP drops', rarity: 'RARE', run: () => player.berserker = 1 },
-    { id: 'DRONE_PILOT', title: 'Drone Mk1', desc: 'Summons a tactical drone', rarity: 'EPIC', run: () => player.drones.push({ angle: Math.random() * Math.PI * 2, fireCooldown: 0 }) },
+    { id: 'DRONE_PILOT', title: 'Drone Mk1', desc: 'Summons a tactical drone', rarity: 'EPIC', run: () => player.drones.push({ angle: Math.random() * Math.PI * 2, fireCooldown: 0, x: player.x, y: player.y, mk2: player.dronesMk2 }) },
     { id: 'FROST_ROUNDS', title: 'Cryo Core', desc: 'Bullets slow boss attacks', rarity: 'RARE', run: () => player.frostRounds += 0.5 },
     { id: 'DRONE_PILOT_MK2', title: 'Drone Mk2', desc: 'Mk1 orbits detach & shoot 2x', rarity: 'LEGENDARY', run: () => { 
         player.drones.forEach(d => { d.mk2 = true; }); 
@@ -1273,7 +1384,11 @@ function spawnNextBoss() {
     if (isInfiniteMode) {
         defeatedBossesCount++;
         document.getElementById('infinite-counter').innerText = `DEFEATED: ${defeatedBossesCount}`;
-        boss = createInfiniteBoss();
+        if (Math.random() < 0.1 || defeatedBossesCount % 10 === 0) {
+            boss = createCheeseLord(Math.pow(1.25, defeatedBossesCount), Math.pow(1.10, defeatedBossesCount));
+        } else {
+            boss = createInfiniteBoss();
+        }
         player.bullets = [];
         updateHealthUI();
         setShake(20, 0.5);
@@ -1775,7 +1890,7 @@ function update(timestamp) {
                 b.minions = b.minions || [];
                 if (b.minions.length < 5) {
                     b.minions.push({
-                        x: b.x + b.width/2 - 20, y: b.y + b.height/2 + 50, spawnX: b.x + b.width/2 - 20,
+                        x: canvas.width/2 - 20, y: canvas.height/2 - 20, spawnX: canvas.width/2 - 20,
                         width: 40, height: 40,
                         health: 2, maxHealth: 2,
                         state: 'IDLE', attackTimer: 1.0, phase: 0,
@@ -2071,16 +2186,16 @@ function update(timestamp) {
             }
 
             if (p.type === 'BOUNCE') {
-                if (p.x < 0) { p.x = 0; p.vx *= -1; }
-                else if (p.x > canvas.width) { p.x = canvas.width; p.vx *= -1; }
-                if (p.y < 0) { p.y = 0; p.vy *= -1; }
-                else if (p.y > canvas.height) { p.y = canvas.height; p.vy *= -1; }
+                if (p.x < 0 && p.vx < 0) { p.x = 0; p.vx *= -1; }
+                else if (p.x > canvas.width && p.vx > 0) { p.x = canvas.width; p.vx *= -1; }
+                if (p.y < 0 && p.vy < 0) { p.y = 0; p.vy *= -1; }
+                else if (p.y > canvas.height && p.vy > 0) { p.y = canvas.height; p.vy *= -1; }
             } else if (b.traits && b.traits.includes('BOUNCY')) {
                 let bounced = false;
-                if (p.x < 0) { p.x = 0; p.vx *= -1; bounced = true; }
-                else if (p.x > canvas.width) { p.x = canvas.width; p.vx *= -1; bounced = true; }
-                if (p.y < 0) { p.y = 0; p.vy *= -1; bounced = true; }
-                else if (p.y > canvas.height) { p.y = canvas.height; p.vy *= -1; bounced = true; }
+                if (p.x < 0 && p.vx < 0) { p.x = 0; p.vx *= -1; bounced = true; }
+                else if (p.x > canvas.width && p.vx > 0) { p.x = canvas.width; p.vx *= -1; bounced = true; }
+                if (p.y < 0 && p.vy < 0) { p.y = 0; p.vy *= -1; bounced = true; }
+                else if (p.y > canvas.height && p.vy > 0) { p.y = canvas.height; p.vy *= -1; bounced = true; }
                 if (bounced) {
                     p.bounces = (p.bounces || 0) + 1;
                     if (p.bounces > 3) p.life = 0;
@@ -2213,6 +2328,11 @@ function update(timestamp) {
     if (boss && boss.minions) {
         boss.minions = boss.minions.filter(m => {
             updateBossEntity(m);
+            if (m.isCheeseSub) {
+                m.x = boss.x + boss.width/2 - m.width/2;
+                m.y = boss.y + boss.height/2 - m.height/2;
+                return true; 
+            }
             // Minion take damage check
             player.bullets.forEach(p => {
                 const dx = (m.x + m.width/2) - p.x;
@@ -3242,21 +3362,52 @@ function draw() {
             ctx.fillStyle = '#fff';
             ctx.shadowColor = '#fff';
         } else {
-            ctx.fillStyle = b.color;
-            ctx.shadowColor = b.color;
+            let bodyColor = b.color;
+            if (b.traits) {
+                if (b.traits.includes('RAGE')) bodyColor = '#ff4757';
+                else if (b.traits.includes('STONE')) bodyColor = '#7f8c8d';
+                else if (b.traits.includes('HEAL')) bodyColor = '#2ecc71';
+                else if (b.traits.includes('CHILL')) bodyColor = '#00d2ff';
+                else if (b.traits.includes('GHOST')) bodyColor = 'rgba(255,255,255,0.8)';
+            }
+            ctx.fillStyle = bodyColor;
+            ctx.shadowColor = bodyColor;
         }
 
         // Rhythmic Core
         const scale = 1 + Math.sin(gameTime * 5) * 0.1;
         ctx.scale(scale * stateScaleX, scale * stateScaleY);
         
-        ctx.fillRect(-b.width/2, -b.height/2, b.width, b.height);
-        
-        // Inner flair and visual state adjustments
-        ctx.fillStyle = b.state === 'BEAM_PREP' || b.state === 'BEAM_FIRE' ? (b === boss ? '#00d2ff' : '#ffa502') : '#fff';
-        ctx.fillRect(-b.width/4, -b.height/4, b.width/2, b.height/2);
+        if (!b.isCheeseSub) {
+            ctx.fillRect(-b.width/2, -b.height/2, b.width, b.height);
+            
+            // Inner flair and visual state adjustments
+            ctx.fillStyle = b.state === 'BEAM_PREP' || b.state === 'BEAM_FIRE' ? (b === boss ? '#00d2ff' : '#ffa502') : '#fff';
+            ctx.fillRect(-b.width/4, -b.height/4, b.width/2, b.height/2);
 
-        // Traits Face visuals
+            // Cheese Lord visuals
+            if (b.isCheeseLord) {
+                // Crown
+                ctx.fillStyle = '#f39c12';
+                ctx.beginPath();
+                ctx.moveTo(-b.width/2, -b.height/2);
+                ctx.lineTo(-b.width/2, -b.height/2 - 30);
+                ctx.lineTo(-b.width/4, -b.height/2 - 15);
+                ctx.lineTo(0, -b.height/2 - 35);
+                ctx.lineTo(b.width/4, -b.height/2 - 15);
+                ctx.lineTo(b.width/2, -b.height/2 - 30);
+                ctx.lineTo(b.width/2, -b.height/2);
+                ctx.fill();
+                // Scepter
+                ctx.fillStyle = '#8e44ad';
+                ctx.fillRect(b.width/2 + 5, -b.height/2 - 20, 10, b.height + 40);
+                ctx.fillStyle = '#ff4757';
+                ctx.beginPath();
+                ctx.arc(b.width/2 + 10, -b.height/2 - 20, 15, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Traits Face visuals
         if (b.traits) {
             ctx.fillStyle = '#000';
             ctx.strokeStyle = '#000';
@@ -3337,6 +3488,7 @@ function draw() {
             }
             
             ctx.restore();
+        }
         }
 
         // State-specific visual changes
