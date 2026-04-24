@@ -332,6 +332,7 @@ function createInfiniteBoss() {
         poolCopy.splice(idx, 1);
     }
 
+    const traits = getTraits();
     return {
         id: -1, // Use -1 or similar for procedural bosses
         x: 400,
@@ -341,6 +342,8 @@ function createInfiniteBoss() {
         height: 80,
         health: BOSS_MAX_HEALTH * hpScale,
         maxHealth: BOSS_MAX_HEALTH * hpScale,
+        speedMod: traits.includes('RAGE') ? 1.5 : 1.0,
+        traits: traits,
         state: 'IDLE',
         attackTimer: 2.0,
         phase: 0,
@@ -468,17 +471,9 @@ const player = {
     multishot: 1
 };
 
-// 3. BOSS DEFINITION
-function createBoss(index) {
-    const data = BOSS_DATA[index];
-    
-    // Scale boss Health and Speed
-    let hpMod = 1.0;
-    let speedMod = 1.0;
-    let traits = [];
-    
-    // Always assign a trait so users can see it, based on the prompt's ambiguity:
+function getTraits() {
     const availableTraits = ['HOMING', 'BOOMERANG', 'RAGE', 'DEPRESSED', 'TRIUMVIRATE', 'STONE', 'SHARP', 'HEAL', 'CHILL', 'BOUNCY', 'GHOST'];
+    let traits = [];
     let chosenTrait = availableTraits[Math.floor(Math.random() * availableTraits.length)];
     if (chosenTrait === 'TRIUMVIRATE') {
         traits.push('TRIUMVIRATE');
@@ -489,15 +484,28 @@ function createBoss(index) {
     } else {
         traits.push(chosenTrait);
     }
+    return traits;
+}
 
+// 3. BOSS DEFINITION
+function createBoss(index) {
+    const data = BOSS_DATA[index];
+    
+    // Scale boss Health and Speed
+    let hpMod = 1.0;
+    let speedMod = 1.0;
+    let traits = [];
+    
+    // In Normal mode, bosses don't have random traits. They are in Infinite and Sandbox.
     if (isInfiniteMode) {
         hpMod = Math.pow(1.25, defeatedBossesCount);
         speedMod = Math.pow(1.10, defeatedBossesCount);
+        traits = getTraits();
     }
     if (isSandboxMode) {
         const hpVal = parseFloat(document.getElementById('sandbox-hp-val').innerText);
         if (!isNaN(hpVal)) hpMod = hpVal;
-        // Optionally assign custom traits in sandbox later
+        traits = getTraits();
     }
     
     // Apply Rage trait multiplier
@@ -961,12 +969,15 @@ function initLevel() {
         if (document.getElementById('sandbox-cheeselord') && document.getElementById('sandbox-cheeselord').checked) {
             boss = createCheeseLord(hpScale, 1.0);
         } else {
+            const traits = getTraits();
             boss = {
                 id: -2,
                 x: 400, y: 150, spawnX: 400,
                 width: 80, height: 80,
                 health: BOSS_MAX_HEALTH * hpScale,
                 maxHealth: BOSS_MAX_HEALTH * hpScale,
+                speedMod: traits.includes('RAGE') ? 1.5 : 1.0,
+                traits: traits,
                 state: 'IDLE', attackTimer: 2.0, phase: 0,
                 color: color, name: 'SANDBOX CORE',
                 targetX: 400, targetY: 150,
@@ -2156,8 +2167,13 @@ function update(timestamp) {
                 const pdy = (player.y + player.height/2) - p.y;
                 const pdist = Math.sqrt(pdx*pdx + pdy*pdy);
                 if (pdist > 0) {
-                    p.vx += (pdx/pdist) * 200 * dt;
-                    p.vy += (pdy/pdist) * 200 * dt;
+                    const speed = Math.sqrt(p.vx*p.vx + p.vy*p.vy);
+                    const homingStrength = 600 * dt;
+                    p.vx += (pdx/pdist) * homingStrength;
+                    p.vy += (pdy/pdist) * homingStrength;
+                    const newSpeed = Math.sqrt(p.vx*p.vx + p.vy*p.vy);
+                    p.vx = (p.vx / newSpeed) * speed;
+                    p.vy = (p.vy / newSpeed) * speed;
                 }
             } else if (b.traits && b.traits.includes('BOOMERANG')) {
                 if (p.life < p.initialLife * 0.6) {
