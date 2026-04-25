@@ -818,12 +818,22 @@ function selectWeapon(type) {
     selectedWeapon = type;
     const gunBtn = document.getElementById('weapon-gun');
     const swordBtn = document.getElementById('weapon-sword');
+    const boomBtn = document.getElementById('weapon-boomerang');
+    
+    // Reset all
+    if (gunBtn) { gunBtn.style.border = 'none'; gunBtn.style.opacity = '0.5'; }
+    if (swordBtn) { swordBtn.style.border = 'none'; swordBtn.style.opacity = '0.5'; }
+    if (boomBtn) { boomBtn.style.border = 'none'; boomBtn.style.opacity = '0.5'; }
+
     if (type === 'GUN') {
         if (gunBtn) { gunBtn.style.border = '2px solid #00d2ff'; gunBtn.style.opacity = '1'; }
-        if (swordBtn) { swordBtn.style.border = 'none'; swordBtn.style.opacity = '0.5'; }
-    } else {
+    } else if (type === 'SWORD') {
         if (swordBtn) { swordBtn.style.border = '2px solid #00d2ff'; swordBtn.style.opacity = '1'; }
-        if (gunBtn) { gunBtn.style.border = 'none'; gunBtn.style.opacity = '0.5'; }
+    } else if (type === 'BOOMERANG') {
+        if (boomBtn) { boomBtn.style.border = '2px solid #00d2ff'; boomBtn.style.opacity = '1'; }
+    } else if (type === 'GRENADE') {
+        const greBtn = document.getElementById('weapon-grenade');
+        if (greBtn) { greBtn.style.border = '2px solid #00d2ff'; greBtn.style.opacity = '1'; }
     }
 }
 
@@ -955,9 +965,33 @@ function initLevel() {
     player.throwingSword = false;
     player.upgrades = {};
     playerMoveSpeed = 450;
+    
+    // Boomerang default stats
+    player.boomerangDamage = 20;
+    player.boomerangCount = 1;
+    player.boomerangSpeed = 600;
+    player.boomerangRange = 400;
+    player.boomerangReturnSpeed = 900;
+    player.boomerangSize = 15;
+    player.boomerangFrost = 0;
+
+    // Grenade default stats
+    player.grenadeDamage = 40;
+    player.grenadeCount = 1;
+    player.grenadeRange = 300;
+    player.grenadeRadius = 100;
+    player.grenadeBounces = 1;
+    player.grenadeFrags = 0;
+
     if (player.weaponType === 'SWORD') {
         player.damage = 25; // Base sword damage approx 2x bullet
         PLAYER_FIRE_RATE = 0.4; // Slower "fire" rate for sword
+    } else if (player.weaponType === 'BOOMERANG') {
+        player.damage = player.boomerangDamage;
+        PLAYER_FIRE_RATE = 1.0; 
+    } else if (player.weaponType === 'GRENADE') {
+        player.damage = player.grenadeDamage;
+        PLAYER_FIRE_RATE = 1.2;
     } else {
         player.damage = 10;
         PLAYER_FIRE_RATE = 0.25;
@@ -1173,32 +1207,32 @@ function playerTakeDamage(source = 'default') {
 const UPGRADES = [
     { id: 'DAMAGE', title: 'Kinetic Amp', desc: 'Core damage +50%', rarity: 'COMMON', run: () => player.damage += 5 },
     { id: 'FIRE_RATE', title: 'Overclock', desc: 'Firing rate +25%', rarity: 'RARE', run: () => PLAYER_FIRE_RATE *= 0.75 },
-    { id: 'MULTISHOT', title: 'Split Core', desc: 'Fires an extra bullet', rarity: 'EPIC', run: () => player.multishot++ },
+    { id: 'MULTISHOT', title: 'Split Core', desc: 'Fires an extra bullet', rarity: 'EPIC', weapon: 'GUN', run: () => player.multishot++ },
     { id: 'HEALTH', title: 'Repair Nano', desc: '+2 Max HP and heal 5', rarity: 'COMMON', run: () => { player.maxHealth += 2; player.health = Math.min(player.maxHealth, player.health + 5); } },
-    { id: 'SPEED', title: 'Photon Accel', desc: 'Bullet speed +25%', rarity: 'COMMON', run: () => PLAYER_BULLET_SPEED *= 1.25 },
-    { id: 'HOMING', title: 'Seeker Core', desc: 'Bullets drift toward boss', rarity: 'RARE', run: () => player.homing = (player.homing || 0) + 0.15 },
-    { id: 'SIZE', title: 'Mass Pulse', desc: 'Bullet size +50%', rarity: 'COMMON', run: () => player.bulletSize = (player.bulletSize || 6) * 1.5 },
+    { id: 'SPEED', title: 'Photon Accel', desc: 'Bullet speed +25%', rarity: 'COMMON', weapon: 'GUN', run: () => PLAYER_BULLET_SPEED *= 1.25 },
+    { id: 'HOMING', title: 'Seeker Core', desc: 'Bullets drift toward boss', rarity: 'RARE', weapon: 'GUN', run: () => player.homing = (player.homing || 0) + 0.15 },
+    { id: 'SIZE', title: 'Mass Pulse', desc: 'Attack size +50%', rarity: 'COMMON', run: () => player.bulletSize = (player.bulletSize || 6) * 1.5 },
     { id: 'LIFESTEAL', title: 'Siphon Soul', desc: 'Chance to heal 1 on hit', rarity: 'EPIC', run: () => player.lifesteal = (player.lifesteal || 0) + 0.03 },
-    { id: 'PIERCE', title: 'Void Shell', desc: 'Bullets pierce 1 target', rarity: 'RARE', run: () => player.pierce = (player.pierce || 0) + 1 },
+    { id: 'PIERCE', title: 'Void Shell', desc: 'Bullets pierce 1 target', rarity: 'RARE', weapon: 'GUN', run: () => player.pierce = (player.pierce || 0) + 1 },
     { id: 'CRIT', title: 'Logic Fault', desc: '10% chance for 3x damage', rarity: 'EPIC', run: () => player.crit = (player.crit || 0) + 0.1 },
-    { id: 'CHARGE_SHOT', title: 'Fusion Pulse', desc: 'Hold to charge (up to 4x DMG)', rarity: 'EPIC', run: () => player.hasChargeShot = true },
-    { id: 'BIGGER_SIZE', title: 'Titan Core', desc: 'Bullet size +100%', rarity: 'RARE', run: () => player.bulletSize = (player.bulletSize || 6) * 2 },
+    { id: 'CHARGE_SHOT', title: 'Fusion Pulse', desc: 'Hold to charge (up to 4x DMG)', rarity: 'EPIC', weapon: 'GUN', run: () => player.hasChargeShot = true },
+    { id: 'BIGGER_SIZE', title: 'Titan Core', desc: 'Bullet size +100%', rarity: 'RARE', weapon: 'GUN', run: () => player.bulletSize = (player.bulletSize || 6) * 2 },
     { id: 'MOVE_SPEED', title: 'Turbo Thruster', desc: 'Move speed +30%', rarity: 'COMMON', run: () => playerMoveSpeed *= 1.3 },
-    { id: 'RICOCHET', title: 'Ricochet', desc: 'Bullets bounce 1 time', rarity: 'RARE', run: () => player.bounces++ },
-    { id: 'REAR_GUARD', title: 'Rear Guard', desc: 'Fires extra bullet behind', rarity: 'RARE', run: () => player.backshot++ },
+    { id: 'RICOCHET', title: 'Ricochet', desc: 'Bullets bounce 1 time', rarity: 'RARE', weapon: 'GUN', run: () => player.bounces++ },
+    { id: 'REAR_GUARD', title: 'Rear Guard', desc: 'Fires extra bullet behind', rarity: 'RARE', weapon: 'GUN', run: () => player.backshot++ },
     { id: 'JUMP_JET', title: 'Jump Jet', desc: 'Jump Force +25%', rarity: 'COMMON', run: () => jumpForce *= 1.25 },
     { id: 'ARMOR', title: 'Ceramic Plate', desc: '20% chance to ignore DMG', rarity: 'RARE', run: () => player.armor = (player.armor || 0) + 0.2 },
     { id: 'GLASS_CANNON', title: 'Glass Cannon', desc: 'DMG +20, Max HP -4', rarity: 'EPIC', run: () => { player.damage += 20; player.maxHealth = Math.max(1, player.maxHealth - 4); player.health = Math.min(player.health, player.maxHealth); updateHealthUI(); } },
-    { id: 'LONG_BARREL', title: 'Long Barrel', desc: 'Bullet range +50%', rarity: 'COMMON', run: () => player.bulletLife *= 1.5 },
-    { id: 'STEADY_AIM', title: 'Steady Aim', desc: 'Fire rate & Spd +20%', rarity: 'RARE', run: () => { PLAYER_FIRE_RATE *= 0.8; PLAYER_BULLET_SPEED *= 1.2; } },
-    { id: 'QUICK_RELOAD', title: 'Quick Fire', desc: 'Firing rate +15%', rarity: 'COMMON', run: () => PLAYER_FIRE_RATE *= 0.85 },
-    { id: 'SOLAR_PANEL', title: 'Solar Core', desc: 'Charge shots faster', rarity: 'RARE', run: () => player.chargeSpeed *= 1.5 },
+    { id: 'LONG_BARREL', title: 'Long Barrel', desc: 'Bullet range +50%', rarity: 'COMMON', weapon: 'GUN', run: () => player.bulletLife *= 1.5 },
+    { id: 'STEADY_AIM', title: 'Steady Aim', desc: 'Fire rate & Spd +20%', rarity: 'RARE', weapon: 'GUN', run: () => { PLAYER_FIRE_RATE *= 0.8; PLAYER_BULLET_SPEED *= 1.2; } },
+    { id: 'QUICK_RELOAD', title: 'Quick Fire', desc: 'Firing rate +15%', rarity: 'COMMON', weapon: 'GUN', run: () => PLAYER_FIRE_RATE *= 0.85 },
+    { id: 'SOLAR_PANEL', title: 'Solar Core', desc: 'Charge shots faster', rarity: 'RARE', weapon: 'GUN', run: () => player.chargeSpeed *= 1.5 },
     { id: 'HULL_HARDER', title: 'Hardened Hull', desc: 'Max Health +4', rarity: 'RARE', run: () => { player.maxHealth += 4; player.health += 4; updateHealthUI(); } },
-    { id: 'EXPLOSIVE', title: 'Nitro Core', desc: 'Bullets explode on hit', rarity: 'EPIC', run: () => player.explosive = (player.explosive || 0) + 1 },
-    { id: 'SPLIT_SHOT', title: 'Fission Shell', desc: 'Bullets split on hit', rarity: 'EPIC', run: () => player.splitting = (player.splitting || 0) + 1 },
+    { id: 'EXPLOSIVE', title: 'Nitro Core', desc: 'Bullets explode on hit', rarity: 'EPIC', weapon: 'GUN', run: () => player.explosive = (player.explosive || 0) + 1 },
+    { id: 'SPLIT_SHOT', title: 'Fission Shell', desc: 'Bullets split on hit', rarity: 'EPIC', weapon: 'GUN', run: () => player.splitting = (player.splitting || 0) + 1 },
     { id: 'BERSERKER', title: 'Berserker Engine', desc: 'Fire rate up as HP drops', rarity: 'RARE', run: () => player.berserker = 1 },
     { id: 'DRONE_PILOT', title: 'Drone Mk1', desc: 'Summons a tactical drone', rarity: 'EPIC', run: () => player.drones.push({ angle: Math.random() * Math.PI * 2, fireCooldown: 0, x: player.x, y: player.y, mk2: player.dronesMk2 }) },
-    { id: 'FROST_ROUNDS', title: 'Cryo Core', desc: 'Bullets slow boss attacks', rarity: 'RARE', run: () => player.frostRounds += 0.5 },
+    { id: 'FROST_ROUNDS', title: 'Cryo Core', desc: 'Bullets slow boss attacks', rarity: 'RARE', weapon: 'GUN', run: () => player.frostRounds += 0.5 },
     { id: 'DRONE_PILOT_MK2', title: 'Drone Mk2', desc: 'Mk1 orbits detach & shoot 2x', rarity: 'LEGENDARY', run: () => { 
         player.drones.forEach(d => { d.mk2 = true; }); 
         player.dronesMk2 = true; 
@@ -1206,14 +1240,32 @@ const UPGRADES = [
     { id: 'REACTIVE_ARMOR', title: 'Reactive Core', desc: 'Release nova when hit', rarity: 'RARE', run: () => player.reactiveArmor++ },
     { id: 'LAST_STAND', title: 'Final Protocol', desc: 'Invuln on fatal hit (1/run)', rarity: 'LEGENDARY', run: () => player.lastStandUsed = false },
     { id: 'TITAN_PLATE', title: 'Titan Plate', desc: 'Max HP +5, move speed -20%', rarity: 'RARE', run: () => { player.maxHealth += 5; player.health += 5; playerMoveSpeed *= 0.8; updateHealthUI(); } },
-    { id: 'SHARP_SHOOTER', title: 'Sharp Shooter', desc: 'DMG +50% at long range', rarity: 'RARE', run: () => player.sharpShooter = true },
-    { id: 'SNIPER_ROUND', title: 'Sniper Core', desc: 'Pierce +1, Spd +50%, DMG +10', rarity: 'EPIC', run: () => { player.pierce = (player.pierce || 0) + 1; PLAYER_BULLET_SPEED *= 1.5; player.damage += 10; } },
-    { id: 'SCATTERGUN', title: 'Scatter Core', desc: '+3 Projectiles, -40% DMG', rarity: 'EPIC', run: () => { player.multishot += 3; player.damage = Math.max(1, player.damage * 0.6); } },
-    { id: 'WHIRLWIND', title: 'Whirlwind', desc: 'Attacks hit all around you', rarity: 'LEGENDARY', run: () => { player.whirlwind = true; } },
-    { id: 'THROWING_SWORD', title: 'Spectral Blade', desc: 'Throw swords like bullets. Enables Gun cards!', rarity: 'LEGENDARY', run: () => { player.throwingSword = true; } },
-    { id: 'VAMPIRIC_STRIKE', title: 'Vampiric Edge', desc: 'High lifesteal, Max HP -2', rarity: 'EPIC', run: () => { player.lifesteal = (player.lifesteal || 0) + 0.1; player.maxHealth = Math.max(1, player.maxHealth - 2); player.health = Math.min(player.health, player.maxHealth); updateHealthUI(); } },
+    { id: 'SHARP_SHOOTER', title: 'Sharp Shooter', desc: 'DMG +50% at long range', rarity: 'RARE', weapon: 'GUN', run: () => player.sharpShooter = true },
+    { id: 'SNIPER_ROUND', title: 'Sniper Core', desc: 'Pierce +1, Spd +50%, DMG +10', rarity: 'EPIC', weapon: 'GUN', run: () => { player.pierce = (player.pierce || 0) + 1; PLAYER_BULLET_SPEED *= 1.5; player.damage += 10; } },
+    { id: 'SCATTERGUN', title: 'Scatter Core', desc: '+3 Projectiles, -40% DMG', rarity: 'EPIC', weapon: 'GUN', run: () => { player.multishot += 3; player.damage = Math.max(1, player.damage * 0.6); } },
+    { id: 'WHIRLWIND', title: 'Whirlwind', desc: 'Attacks hit all around you', rarity: 'LEGENDARY', weapon: 'SWORD', run: () => { player.whirlwind = true; } },
+    { id: 'THROWING_SWORD', title: 'Spectral Blade', desc: 'Throw swords like bullets. Enables Gun cards!', rarity: 'LEGENDARY', weapon: 'SWORD', run: () => { player.throwingSword = true; } },
+    { id: 'VAMPIRIC_STRIKE', title: 'Vampiric Edge', desc: 'High lifesteal, Max HP -2', rarity: 'EPIC', weapon: 'SWORD', run: () => { player.lifesteal = (player.lifesteal || 0) + 0.1; player.maxHealth = Math.max(1, player.maxHealth - 2); player.health = Math.min(player.health, player.maxHealth); updateHealthUI(); } },
     { id: 'XP_BOOST', title: 'Core Extractor', desc: 'Bosses grant +25% more XP', rarity: 'LEGENDARY', run: () => { player.xpMultiplier = (player.xpMultiplier || 1.0) + 0.25; } }
 ];
+
+const BOOMERANG_UPGRADES = [
+    { id: 'BOOMERANG_EXTRA', title: 'Twin Orbit', desc: '+1 Boomerang', rarity: 'EPIC', weapon: 'BOOMERANG', run: () => player.boomerangCount++ },
+    { id: 'BOOMERANG_DMG', title: 'Sharp Edge', desc: 'Boomerang damage +10', rarity: 'COMMON', weapon: 'BOOMERANG', run: () => player.boomerangDamage += 10 },
+    { id: 'BOOMERANG_RANGE', title: 'Far Reach', desc: 'Boomerang range +40%', rarity: 'COMMON', weapon: 'BOOMERANG', run: () => player.boomerangRange *= 1.4 },
+    { id: 'BOOMERANG_FROST', title: 'Glacial Blade', desc: 'Boomerangs slow enemies', rarity: 'RARE', weapon: 'BOOMERANG', run: () => player.boomerangFrost += 0.3 },
+    { id: 'BOOMERANG_SPEED', title: 'Quick Return', desc: 'Boomerang speed +30%', rarity: 'RARE', weapon: 'BOOMERANG', run: () => { player.boomerangSpeed *= 1.3; player.boomerangReturnSpeed *= 1.3; } }
+];
+
+const GRENADE_UPGRADES = [
+    { id: 'GRENADE_COUNT', title: 'Cluster Pack', desc: '+1 Grenade', rarity: 'EPIC', weapon: 'GRENADE', run: () => player.grenadeCount++ },
+    { id: 'GRENADE_RADIUS', title: 'Blast Shield', desc: 'Explosion radius +50%', rarity: 'RARE', weapon: 'GRENADE', run: () => player.grenadeRadius *= 1.5 },
+    { id: 'GRENADE_DMG', title: 'Heavy Payload', desc: 'Grenade damage +20', rarity: 'COMMON', weapon: 'GRENADE', run: () => player.grenadeDamage += 20 },
+    { id: 'GRENADE_FRAG', title: 'Shrapnel', desc: 'Releases fragment bullets', rarity: 'EPIC', weapon: 'GRENADE', run: () => player.grenadeFrags += 4 },
+    { id: 'GRENADE_BOUNCE', title: 'Rubber Shell', desc: 'Extra bounce before blast', rarity: 'COMMON', weapon: 'GRENADE', run: () => player.grenadeBounces++ }
+];
+
+const ALL_UPGRADES = [...UPGRADES, ...BOOMERANG_UPGRADES, ...GRENADE_UPGRADES];
 
 function checkLevelUp() {
     let reqXP = Math.floor(1.8 * Math.pow(currentLevel, 2));
@@ -1231,10 +1283,25 @@ function showUpgradeScreen() {
     screen.style.display = 'flex';
     
     // Check constraints
-    let validUpgrades = [...UPGRADES];
-    if (!player.drones || player.drones.length === 0 || player.dronesMk2) {
-        validUpgrades = validUpgrades.filter(u => u.id !== 'DRONE_PILOT_MK2');
-    }
+    let validUpgrades = [...ALL_UPGRADES];
+    validUpgrades = validUpgrades.filter(u => {
+        // Exclusivity: Weapon-specific cards only show for that weapon
+        if (u.weapon && u.weapon !== player.weaponType) {
+            // Special case: Spectral Blade allows Gun cards
+            if (player.throwingSword && u.weapon === 'GUN') {
+                // Allow
+            } else {
+                return false;
+            }
+        }
+        
+        // Logical constraints
+        if (u.id === 'DRONE_PILOT_MK2') {
+            if (!player.drones || player.drones.length === 0 || player.dronesMk2) return false;
+        }
+        
+        return true;
+    });
     
     // Pick 3 random upgrades
     const shuffled = validUpgrades.sort(() => 0.5 - Math.random());
@@ -1256,6 +1323,12 @@ function showUpgradeScreen() {
             if (up.id === 'QUICK_RELOAD') displayDesc = 'Swing speed +15%';
             if (up.id === 'FROST_ROUNDS') displayDesc = 'Hits slow boss attacks';
             if (up.id === 'SHARP_SHOOTER') { displayTitle = 'Executioner'; displayDesc = 'DMG +50% to distant bosses'; }
+        }
+
+        if (player.weaponType === 'GRENADE') {
+            if (up.id === 'FIRE_RATE') displayDesc = 'Throw rate +25%';
+            if (up.id === 'SIZE') { displayTitle = 'Big Bang'; displayDesc = 'Explosion radius +50%'; }
+            if (up.id === 'DAMAGE') displayDesc = 'Explosion damage +5';
         }
 
         const card = document.createElement('div');
@@ -1298,7 +1371,7 @@ window.showIndex = function() {
     grid.innerHTML = '';
     const collected = JSON.parse(localStorage.getItem('collectedUpgrades') || '[]');
     
-    UPGRADES.forEach(up => {
+    ALL_UPGRADES.forEach(up => {
         const isCollected = collected.includes(up.id);
         const el = document.createElement('div');
         el.className = `upgrade-card ${up.rarity}`;
@@ -1324,7 +1397,7 @@ window.showSandbox = function() {
     // Populate Upgrades
     const upList = document.getElementById('sandbox-upgrades-list');
     upList.innerHTML = '';
-    UPGRADES.forEach(up => {
+    ALL_UPGRADES.forEach(up => {
         const lbl = document.createElement('label');
         lbl.style.display = 'flex';
         lbl.style.alignItems = 'center';
@@ -1417,7 +1490,7 @@ function spawnNextBoss() {
     if (isInfiniteMode) {
         defeatedBossesCount++;
         document.getElementById('infinite-counter').innerText = `DEFEATED: ${defeatedBossesCount}`;
-        if (Math.random() < 0.1 || defeatedBossesCount % 10 === 0) {
+        if (defeatedBossesCount % 100 === 0) {
             boss = createCheeseLord(Math.pow(1.25, defeatedBossesCount), Math.pow(1.10, defeatedBossesCount));
         } else {
             boss = createInfiniteBoss();
@@ -1451,13 +1524,13 @@ function bossTakeDamage(target, amount = player.damage) {
     spawnParticles(target.x + target.width/2, target.y + target.height/2, target.color, 20);
     
     // Spawn small XP orb from hit
-    if (Math.random() < 0.5) { // 50% chance on hit
+    if (Math.random() < 0.3) { // Reduced from 0.5
         xpOrbs.push({
             x: target.x + target.width / 2,
             y: target.y + target.height / 2,
             vx: (Math.random() - 0.5) * 400,
             vy: -Math.random() * 300 - 100,
-            value: 0.5,
+            value: 0.1, // Reduced from 0.5
             homingDelay: 0.5
         });
     }
@@ -1498,14 +1571,14 @@ function bossTakeDamage(target, amount = player.damage) {
         sfx.win();
         
         // Final burst of XP Orbs
-        for(let i=0; i<30; i++) {
+        for(let i=0; i<20; i++) {
             xpOrbs.push({
                 x: target.x + target.width / 2,
                 y: target.y + target.height / 2,
                 vx: (Math.random() - 0.5) * 600,
                 vy: -Math.random() * 500 - 200,
-                value: 1, // Larger value
-                homingDelay: 1.0 + Math.random() * 1.5 // delays homing for a scatter effect
+                value: 0.5, // Reduced from 1
+                homingDelay: 1.0 + Math.random() * 1.5 
             });
         }
         // Release buffered XP
@@ -1574,6 +1647,50 @@ function shoot(bonusCharge = 0) {
 
     let dx = mouseX - (player.x + player.width/2);
     let dy = mouseY - (player.y + player.height/2);
+
+    if (player.weaponType === 'BOOMERANG') {
+        const count = player.boomerangCount || 1;
+        for (let i = 0; i < count; i++) {
+            const angle = Math.atan2(dy, dx) + (i - (count-1)/2) * 0.2;
+            player.bullets.push({
+                x: player.x + player.width/2,
+                y: player.y + player.height/2,
+                vx: Math.cos(angle) * player.boomerangSpeed,
+                vy: Math.sin(angle) * player.boomerangSpeed,
+                radius: player.boomerangSize,
+                life: 10,
+                isBoomerang: true,
+                state: 'OUT',
+                returnTimer: player.boomerangRange / player.boomerangSpeed,
+                damageTimer: 0,
+                angle: 0
+            });
+        }
+        player.fireCooldown = PLAYER_FIRE_RATE;
+        sfx.click();
+        return;
+    }
+
+    if (player.weaponType === 'GRENADE') {
+        const count = player.grenadeCount || 1;
+        for (let i = 0; i < count; i++) {
+            const angle = Math.atan2(dy, dx) + (i - (count-1)/2) * 0.2;
+            player.bullets.push({
+                x: player.x + player.width/2,
+                y: player.y + player.height/2,
+                vx: Math.cos(angle) * 500,
+                vy: Math.sin(angle) * 500 - 200, // Arc
+                radius: 12,
+                isGrenade: true,
+                bounces: player.grenadeBounces || 1,
+                timer: 1.5,
+                angle: 0
+            });
+        }
+        player.fireCooldown = PLAYER_FIRE_RATE;
+        sfx.click();
+        return;
+    }
     
     // Default shoot forward if no clear aim
     if (Math.abs(dx) < 2 && Math.abs(dy) < 2) {
@@ -2308,7 +2425,7 @@ function update(timestamp) {
             }
 
             // Check collision with breakable platforms (and non-breakable)
-            if (!b.traits || !b.traits.includes('GHOST')) {
+            if (!b.traits || (!b.traits.includes('GHOST') && !b.traits.includes('BOOMERANG'))) {
                 let hitPlatform = false;
                 for (let i = 0; i < worldObjects.length; i++) {
                     let obj = worldObjects[i];
@@ -2367,7 +2484,7 @@ function update(timestamp) {
             s.y += s.vy * dt;
 
             // Check collision with breakable platforms
-            if (!b.traits || !b.traits.includes('GHOST')) {
+            if (!b.traits || (!b.traits.includes('GHOST') && !b.traits.includes('BOOMERANG'))) {
                 let hitPlatform = false;
                 for (let i = 0; i < worldObjects.length; i++) {
                     let obj = worldObjects[i];
@@ -2465,6 +2582,88 @@ function update(timestamp) {
 
     // Update Player Bullets
     player.bullets = player.bullets.filter(p => {
+        if (p.isGrenade) {
+            p.angle += dt * 10;
+            p.vy += gravity * 0.8 * dt; 
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.timer -= dt;
+
+            // Simple bounce
+            if (p.y > canvas.height - 20) {
+                if (p.bounces > 0) {
+                    p.vy *= -0.5;
+                    p.bounces--;
+                    p.y = canvas.height - 21;
+                } else p.timer = 0;
+            }
+            if (p.x < 0 || p.x > canvas.width) {
+                 if (p.bounces > 0) {
+                    p.vx *= -0.8;
+                    p.bounces--;
+                    p.x = Math.max(0, Math.min(canvas.width, p.x));
+                 } else p.timer = 0;
+            }
+
+            if (p.timer <= 0) {
+                setShake(10, 0.2);
+                sfx.land();
+                spawnParticles(p.x, p.y, '#f39c12', 30);
+                if (boss && boss.health > 0) {
+                    const bdx = (boss.x + boss.width/2) - p.x;
+                    const bdy = (boss.y + boss.height/2) - p.y;
+                    if (Math.sqrt(bdx*bdx + bdy*bdy) < (player.grenadeRadius || 100) + boss.width/2) {
+                        bossTakeDamage(boss, player.damage);
+                    }
+                }
+                if (player.grenadeFrags > 0) {
+                    for(let i=0; i<player.grenadeFrags; i++) {
+                        const ang = (i/player.grenadeFrags) * Math.PI * 2;
+                        player.bullets.push({
+                            x: p.x, y: p.y, vx: Math.cos(ang) * 500, vy: Math.sin(ang) * 500,
+                            radius: 6, life: 1, isFrag: true
+                        });
+                    }
+                }
+                return false;
+            }
+            return true;
+        }
+
+        if (p.isBoomerang) {
+            p.angle += dt * 15;
+            if (p.state === 'OUT') {
+                p.returnTimer -= dt;
+                if (p.returnTimer <= 0) p.state = 'RETURN';
+            } else if (p.state === 'RETURN') {
+                const rdx = (player.x + player.width/2) - p.x;
+                const rdy = (player.y + player.height/2) - p.y;
+                const rdist = Math.sqrt(rdx*rdx + rdy*rdy);
+                if (rdist < 20) return false; // Caught
+                p.vx = (rdx/rdist) * player.boomerangReturnSpeed;
+                p.vy = (rdy/rdist) * player.boomerangReturnSpeed;
+            }
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            
+            // Damage timer to avoid everyframe hit
+            if (p.damageTimer > 0) p.damageTimer -= dt;
+            
+            // Collision with boss
+            if (boss && boss.health > 0 && boss.state !== 'DYING' && p.damageTimer <= 0) {
+                 const bdx = (boss.x + boss.width/2) - p.x;
+                 const bdy = (boss.y + boss.height/2) - p.y;
+                 if (Math.sqrt(bdx*bdx + bdy*bdy) < p.radius + boss.width/2) {
+                     bossTakeDamage(boss, player.damage);
+                     p.damageTimer = 0.15;
+                     if (player.boomerangFrost) {
+                         boss.slowTimer = Math.max(boss.slowTimer || 0, player.boomerangFrost);
+                     }
+                 }
+            }
+            return true;
+        }
+
         // Homing
         if (player.homing && boss && boss.health > 0) {
             const dx = (boss.x + boss.width/2) - p.x;
@@ -3261,7 +3460,43 @@ function draw() {
 
     // Draw Player Bullets
     player.bullets.forEach(p => {
-        if (player.throwingSword) {
+        if (p.isGrenade) {
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.angle);
+            ctx.fillStyle = '#f39c12';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#e67e22';
+            ctx.beginPath();
+            ctx.arc(0, 0, p.radius, 0, Math.PI * 2);
+            ctx.fill();
+            // Fuse effect
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, -p.radius);
+            ctx.lineTo(Math.cos(p.angle*2)*5, -p.radius-5);
+            ctx.stroke();
+            ctx.restore();
+        } else if (p.isBoomerang) {
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.angle);
+            ctx.fillStyle = '#fff';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#f1c40f';
+            ctx.beginPath();
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = '#fff';
+            ctx.moveTo(-p.radius, -p.radius/2);
+            ctx.lineTo(0, p.radius/2);
+            ctx.lineTo(p.radius, -p.radius/2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(0, 0, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        } else if (player.throwingSword) {
             ctx.save();
             ctx.translate(p.x, p.y);
             const moveAngle = Math.atan2(p.vy, p.vx);

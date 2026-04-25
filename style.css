@@ -179,9 +179,21 @@ canvas {
 .menu-buttons {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 12px;
     margin-top: 40px;
-    width: 240px;
+    width: 100%;
+    max-width: 300px;
+}
+
+.menu-buttons > button, .menu-buttons > div {
+    width: 100%;
+}
+
+.menu-buttons div {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
 }
 
 button {
