@@ -139,8 +139,6 @@ const sfx = new SoundEngine();
 
 const gravity = 2200;    
 const friction = 0.001;  
-let jumpForce = -750; 
-let playerMoveSpeed = 450;   
 const acceleration = 2500; 
 const coyoteTime = 0.25;
 let randomPlatformTimer = 0;
@@ -149,7 +147,6 @@ let randomPlatformTimer = 0;
 const PLAYER_MAX_HEALTH_DEFAULT = 10;
 const BOSS_MAX_HEALTH = 750; // Nerfed from 1000
 let PLAYER_BULLET_SPEED = 800;
-let PLAYER_FIRE_RATE = 0.25;
 const INVULN_DURATION = 1.2;
 const BOSS_HIT_RESONANCE = 0.2; // Slightly lower resonance for bullets
 
@@ -462,16 +459,23 @@ const player = {
     velY: 0,
     jumping: false,
     coyoteCounter: 0,
-    color: '#00d2ff',
+    color: localStorage.getItem('playerColor') || '#00d2ff',
+    eyeStyle: localStorage.getItem('playerEyeStyle') || 'STARE',
+    hat: localStorage.getItem('playerHat') || 'NONE',
     health: PLAYER_MAX_HEALTH_DEFAULT,
     maxHealth: PLAYER_MAX_HEALTH_DEFAULT,
     invuln: 0,
     radius: 15,
     bullets: [],
     fireCooldown: 0,
-    damage: 10,
+    damage: JSON.parse(localStorage.getItem('stat_damage') || '10'),
+    crit: JSON.parse(localStorage.getItem('stat_crit') || '0') / 100,
     multishot: 1
 };
+
+let playerMoveSpeed = JSON.parse(localStorage.getItem('stat_speed') || '450');
+let jumpForce = JSON.parse(localStorage.getItem('stat_jump') || '-750');
+let PLAYER_FIRE_RATE = JSON.parse(localStorage.getItem('stat_firerate') || '0.25');
 
 function getTraits() {
     const availableTraits = ['HOMING', 'BOOMERANG', 'RAGE', 'DEPRESSED', 'TRIUMVIRATE', 'STONE', 'SHARP', 'HEAL', 'CHILL', 'BOUNCY', 'GHOST', 'REACTIVE', 'ORBITAL', 'TELEPORT', 'TITAN', 'STATIC'];
@@ -702,6 +706,7 @@ function resetRun(backToMenu = true) {
 }
 
 function showTitle() {
+    gameState = 'TITLE';
     document.getElementById('title-screen').style.display = 'flex';
     document.getElementById('controls-screen').style.display = 'none';
     document.getElementById('admin-panel').style.display = 'none';
@@ -710,6 +715,154 @@ function showTitle() {
     if (indexScreen) indexScreen.style.display = 'none';
     const sandboxScreen = document.getElementById('sandbox-screen');
     if (sandboxScreen) sandboxScreen.style.display = 'none';
+    const avatarScreen = document.getElementById('avatar-screen');
+    if (avatarScreen) avatarScreen.style.display = 'none';
+    document.getElementById('ui').style.display = 'none';
+    document.getElementById('xp-container').style.display = 'none';
+}
+
+function showAvatarEditor() {
+    document.getElementById('title-screen').style.display = 'none';
+    document.getElementById('avatar-screen').style.display = 'flex';
+    initAvatarEditor();
+}
+
+const AVATAR_COLORS = [
+    '#00d2ff', '#ff4757', '#2ecc71', '#f1c40f', '#9b59b6',
+    '#e67e22', '#ffffff', '#2f3542', '#ff9f43', '#54a0ff'
+];
+const EYE_STYLES = ['STARE', 'NARROW', 'WINK', 'NONE', 'GLOW', 'CUTE'];
+const HAT_STYLES = ['NONE', 'TOPHAT', 'BEANIE', 'HALO', 'CROWN', 'SPIKES'];
+
+function initAvatarEditor() {
+    const colorGrid = document.getElementById('color-options');
+    if (colorGrid) {
+        colorGrid.innerHTML = '';
+        AVATAR_COLORS.forEach(color => {
+            const div = document.createElement('div');
+            div.className = `color-circle ${player.color === color ? 'active' : ''}`;
+            div.style.backgroundColor = color;
+            div.onclick = () => {
+                player.color = color;
+                localStorage.setItem('playerColor', color);
+                initAvatarEditor();
+            };
+            colorGrid.appendChild(div);
+        });
+    }
+
+    const eyeGrid = document.getElementById('eye-options');
+    if (eyeGrid) {
+        eyeGrid.innerHTML = '';
+        EYE_STYLES.forEach(style => {
+            const btn = document.createElement('button');
+            btn.className = `eye-style-btn ${player.eyeStyle === style ? 'active' : ''}`;
+            btn.innerText = style;
+            btn.onclick = () => {
+                player.eyeStyle = style;
+                localStorage.setItem('playerEyeStyle', style);
+                initAvatarEditor();
+            };
+            eyeGrid.appendChild(btn);
+        });
+    }
+
+    const hatGrid = document.getElementById('hat-options');
+    if (hatGrid) {
+        hatGrid.innerHTML = '';
+        HAT_STYLES.forEach(style => {
+            const btn = document.createElement('button');
+            btn.className = `eye-style-btn ${player.hat === style ? 'active' : ''}`;
+            btn.innerText = style;
+            btn.onclick = () => {
+                player.hat = style;
+                localStorage.setItem('playerHat', style);
+                initAvatarEditor();
+            };
+            hatGrid.appendChild(btn);
+        });
+    }
+
+    renderAvatarPreview();
+}
+
+function renderAvatarPreview() {
+    const canvas = document.getElementById('avatarCanvas');
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawPlayerAvatar(ctx, 10, 10, 40, 40, player.color, player.eyeStyle, player.hat);
+    }
+    
+    const creationCanvas = document.getElementById('creationCanvas');
+    if (creationCanvas) {
+        const ctx = creationCanvas.getContext('2d');
+        ctx.clearRect(0, 0, creationCanvas.width, creationCanvas.height);
+        drawPlayerAvatar(ctx, 10, 10, 60, 60, player.color, player.eyeStyle, player.hat);
+    }
+}
+
+function drawPlayerAvatar(ctx, x, y, w, h, color, eyeStyle, hatStyle = 'NONE') {
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = color;
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, w, h);
+    ctx.shadowBlur = 0;
+
+    // Hat rendering
+    if (hatStyle !== 'NONE') {
+        if (hatStyle === 'TOPHAT') {
+            ctx.fillStyle = '#222';
+            ctx.fillRect(x - w*0.1, y - h*0.1, w*1.2, h*0.1);
+            ctx.fillRect(x + w*0.2, y - h*0.6, w*0.6, h*0.5);
+        } else if (hatStyle === 'BEANIE') {
+            ctx.fillStyle = '#ff4757';
+            ctx.beginPath(); ctx.arc(x + w/2, y, w/2, Math.PI, 0); ctx.fill();
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x + w/2, y - w/2, w*0.1, 0, Math.PI*2); ctx.fill();
+        } else if (hatStyle === 'HALO') {
+            ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.ellipse(x + w/2, y - h*0.2, w*0.4, h*0.1, 0, 0, Math.PI*2); ctx.stroke();
+        } else if (hatStyle === 'CROWN') {
+            ctx.fillStyle = '#f1c40f';
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - h*0.3); ctx.lineTo(x + w*0.25, y - h*0.1);
+            ctx.lineTo(x + w*0.5, y - h*0.3); ctx.lineTo(x + w*0.75, y - h*0.1); ctx.lineTo(x + w, y - h*0.3);
+            ctx.lineTo(x + w, y); ctx.closePath(); ctx.fill();
+        } else if (hatStyle === 'SPIKES') {
+            ctx.fillStyle = '#222';
+            for(let i=0; i<3; i++){
+                ctx.beginPath(); ctx.moveTo(x + (i*w/2.5), y); ctx.lineTo(x + (i*w/2.5) + w*0.1, y - h*0.3);
+                ctx.lineTo(x + (i*w/2.5) + w*0.2, y); ctx.fill();
+            }
+        }
+    }
+
+    ctx.fillStyle = '#fff';
+    const eyeSize = w * 0.15;
+    const eyeY = y + h * 0.3;
+    const eyeSpacing = w * 0.25;
+    const centerX = x + w / 2;
+
+    if (eyeStyle === 'STARE') {
+        ctx.fillRect(centerX - eyeSpacing - eyeSize/2, eyeY, eyeSize, eyeSize);
+        ctx.fillRect(centerX + eyeSpacing - eyeSize/2, eyeY, eyeSize, eyeSize);
+    } else if (eyeStyle === 'NARROW') {
+        ctx.fillRect(centerX - eyeSpacing - eyeSize/2, eyeY + eyeSize/3, eyeSize, eyeSize/3);
+        ctx.fillRect(centerX + eyeSpacing - eyeSize/2, eyeY + eyeSize/3, eyeSize, eyeSize/3);
+    } else if (eyeStyle === 'WINK') {
+        ctx.fillRect(centerX - eyeSpacing - eyeSize/2, eyeY, eyeSize, eyeSize);
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(centerX + eyeSpacing - eyeSize/2, eyeY + eyeSize/2);
+        ctx.lineTo(centerX + eyeSpacing + eyeSize/2, eyeY + eyeSize/2); ctx.stroke();
+    } else if (eyeStyle === 'GLOW') {
+        ctx.shadowBlur = 15; ctx.shadowColor = '#fff'; ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(centerX - eyeSpacing, eyeY + eyeSize/2, eyeSize/2, 0, Math.PI * 2);
+        ctx.arc(centerX + eyeSpacing, eyeY + eyeSize/2, eyeSize/2, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+    } else if (eyeStyle === 'CUTE') {
+        ctx.beginPath(); ctx.arc(centerX - eyeSpacing, eyeY + eyeSize/2, eyeSize/2, 0, Math.PI * 2);
+        ctx.arc(centerX + eyeSpacing, eyeY + eyeSize/2, eyeSize/2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(centerX - eyeSpacing, eyeY + eyeSize/2, 1.5, 0, Math.PI * 2);
+        ctx.arc(centerX + eyeSpacing, eyeY + eyeSize/2, 1.5, 0, Math.PI * 2); ctx.fill();
+    }
 }
 
 function showAdminPanel() {
@@ -754,6 +907,7 @@ window.toggleSFX = toggleSFX;
 window.remapKey = remapKey;
 window.resetRun = resetRun;
 window.showTitle = showTitle;
+window.showAvatarEditor = showAvatarEditor;
 window.postAnnouncement = postAnnouncement;
 window.clearAnnouncement = clearAnnouncement;
 window.adminLogin = adminLogin;
@@ -819,11 +973,13 @@ function selectWeapon(type) {
     const gunBtn = document.getElementById('weapon-gun');
     const swordBtn = document.getElementById('weapon-sword');
     const boomBtn = document.getElementById('weapon-boomerang');
+    const greBtn = document.getElementById('weapon-grenade');
     
     // Reset all
     if (gunBtn) { gunBtn.style.border = 'none'; gunBtn.style.opacity = '0.5'; }
     if (swordBtn) { swordBtn.style.border = 'none'; swordBtn.style.opacity = '0.5'; }
     if (boomBtn) { boomBtn.style.border = 'none'; boomBtn.style.opacity = '0.5'; }
+    if (greBtn) { greBtn.style.border = 'none'; greBtn.style.opacity = '0.5'; }
 
     if (type === 'GUN') {
         if (gunBtn) { gunBtn.style.border = '2px solid #00d2ff'; gunBtn.style.opacity = '1'; }
@@ -837,15 +993,23 @@ function selectWeapon(type) {
     }
 }
 
-async function adminLogin() {
-    const pass = prompt("Enter Admin Password (demo default: admin123):");
+window.submitAdminLogin = function() {
+    const passInput = document.getElementById('admin-pass');
+    const pass = passInput.value;
     if (pass === "admin123") {
         isAdminUser = true;
         updateAdminUI();
+        document.getElementById('admin-login-form').style.display = 'none';
         alert("Admin mode activated.");
     } else {
         alert("Incorrect password.");
     }
+    passInput.value = '';
+};
+
+async function adminLogin() {
+    // Legacy function, no longer used by default but kept for internal compatibility if needed
+    window.submitAdminLogin();
 }
 
 function showControls() {
@@ -934,13 +1098,13 @@ function initLevel() {
     player.invuln = 0;
     player.bullets = [];
     player.fireCooldown = 0;
-    player.damage = 10;
+    player.damage = 10 + (parseInt(localStorage.getItem('stat_damage')) || 0);
     player.multishot = 1;
     player.homing = 0;
     player.bulletSize = 6;
     player.lifesteal = 0;
     player.pierce = 0;
-    player.crit = 0;
+    player.crit = (parseInt(localStorage.getItem('stat_crit')) || 0) / 100;
     player.chargeTime = 0;
     player.hasChargeShot = false;
     player.bounces = 0;
@@ -964,7 +1128,9 @@ function initLevel() {
     player.whirlwind = false;
     player.throwingSword = false;
     player.upgrades = {};
-    playerMoveSpeed = 450;
+    playerMoveSpeed = 450 + (parseInt(localStorage.getItem('stat_speed')) || 0) * 2;
+    jumpForce = -750 - (parseInt(localStorage.getItem('stat_jump')) || 0) * 5;
+    PLAYER_FIRE_RATE = 0.25 * (1 - ((parseInt(localStorage.getItem('stat_firerate')) || 0) / 1000));
     
     // Boomerang default stats
     player.boomerangDamage = 20;
@@ -1205,64 +1371,61 @@ function playerTakeDamage(source = 'default') {
 
 // --- UPGRADE SYSTEM ---
 const UPGRADES = [
-    { id: 'DAMAGE', title: 'Kinetic Amp', desc: 'Core damage +50%', rarity: 'COMMON', run: () => player.damage += 5 },
-    { id: 'FIRE_RATE', title: 'Overclock', desc: 'Firing rate +25%', rarity: 'RARE', run: () => PLAYER_FIRE_RATE *= 0.75 },
-    { id: 'MULTISHOT', title: 'Split Core', desc: 'Fires an extra bullet', rarity: 'EPIC', weapon: 'GUN', run: () => player.multishot++ },
-    { id: 'HEALTH', title: 'Repair Nano', desc: '+2 Max HP and heal 5', rarity: 'COMMON', run: () => { player.maxHealth += 2; player.health = Math.min(player.maxHealth, player.health + 5); } },
-    { id: 'SPEED', title: 'Photon Accel', desc: 'Bullet speed +25%', rarity: 'COMMON', weapon: 'GUN', run: () => PLAYER_BULLET_SPEED *= 1.25 },
-    { id: 'HOMING', title: 'Seeker Core', desc: 'Bullets drift toward boss', rarity: 'RARE', weapon: 'GUN', run: () => player.homing = (player.homing || 0) + 0.15 },
-    { id: 'SIZE', title: 'Mass Pulse', desc: 'Attack size +50%', rarity: 'COMMON', run: () => player.bulletSize = (player.bulletSize || 6) * 1.5 },
-    { id: 'LIFESTEAL', title: 'Siphon Soul', desc: 'Chance to heal 1 on hit', rarity: 'EPIC', run: () => player.lifesteal = (player.lifesteal || 0) + 0.03 },
-    { id: 'PIERCE', title: 'Void Shell', desc: 'Bullets pierce 1 target', rarity: 'RARE', weapon: 'GUN', run: () => player.pierce = (player.pierce || 0) + 1 },
-    { id: 'CRIT', title: 'Logic Fault', desc: '10% chance for 3x damage', rarity: 'EPIC', run: () => player.crit = (player.crit || 0) + 0.1 },
-    { id: 'CHARGE_SHOT', title: 'Fusion Pulse', desc: 'Hold to charge (up to 4x DMG)', rarity: 'EPIC', weapon: 'GUN', run: () => player.hasChargeShot = true },
-    { id: 'BIGGER_SIZE', title: 'Titan Core', desc: 'Bullet size +100%', rarity: 'RARE', weapon: 'GUN', run: () => player.bulletSize = (player.bulletSize || 6) * 2 },
-    { id: 'MOVE_SPEED', title: 'Turbo Thruster', desc: 'Move speed +30%', rarity: 'COMMON', run: () => playerMoveSpeed *= 1.3 },
-    { id: 'RICOCHET', title: 'Ricochet', desc: 'Bullets bounce 1 time', rarity: 'RARE', weapon: 'GUN', run: () => player.bounces++ },
-    { id: 'REAR_GUARD', title: 'Rear Guard', desc: 'Fires extra bullet behind', rarity: 'RARE', weapon: 'GUN', run: () => player.backshot++ },
-    { id: 'JUMP_JET', title: 'Jump Jet', desc: 'Jump Force +25%', rarity: 'COMMON', run: () => jumpForce *= 1.25 },
-    { id: 'ARMOR', title: 'Ceramic Plate', desc: '20% chance to ignore DMG', rarity: 'RARE', run: () => player.armor = (player.armor || 0) + 0.2 },
-    { id: 'GLASS_CANNON', title: 'Glass Cannon', desc: 'DMG +20, Max HP -4', rarity: 'EPIC', run: () => { player.damage += 20; player.maxHealth = Math.max(1, player.maxHealth - 4); player.health = Math.min(player.health, player.maxHealth); updateHealthUI(); } },
-    { id: 'LONG_BARREL', title: 'Long Barrel', desc: 'Bullet range +50%', rarity: 'COMMON', weapon: 'GUN', run: () => player.bulletLife *= 1.5 },
-    { id: 'STEADY_AIM', title: 'Steady Aim', desc: 'Fire rate & Spd +20%', rarity: 'RARE', weapon: 'GUN', run: () => { PLAYER_FIRE_RATE *= 0.8; PLAYER_BULLET_SPEED *= 1.2; } },
-    { id: 'QUICK_RELOAD', title: 'Quick Fire', desc: 'Firing rate +15%', rarity: 'COMMON', weapon: 'GUN', run: () => PLAYER_FIRE_RATE *= 0.85 },
-    { id: 'SOLAR_PANEL', title: 'Solar Core', desc: 'Charge shots faster', rarity: 'RARE', weapon: 'GUN', run: () => player.chargeSpeed *= 1.5 },
-    { id: 'HULL_HARDER', title: 'Hardened Hull', desc: 'Max Health +4', rarity: 'RARE', run: () => { player.maxHealth += 4; player.health += 4; updateHealthUI(); } },
-    { id: 'EXPLOSIVE', title: 'Nitro Core', desc: 'Bullets explode on hit', rarity: 'EPIC', weapon: 'GUN', run: () => player.explosive = (player.explosive || 0) + 1 },
-    { id: 'SPLIT_SHOT', title: 'Fission Shell', desc: 'Bullets split on hit', rarity: 'EPIC', weapon: 'GUN', run: () => player.splitting = (player.splitting || 0) + 1 },
-    { id: 'BERSERKER', title: 'Berserker Engine', desc: 'Fire rate up as HP drops', rarity: 'RARE', run: () => player.berserker = 1 },
-    { id: 'DRONE_PILOT', title: 'Drone Mk1', desc: 'Summons a tactical drone', rarity: 'EPIC', run: () => player.drones.push({ angle: Math.random() * Math.PI * 2, fireCooldown: 0, x: player.x, y: player.y, mk2: player.dronesMk2 }) },
-    { id: 'FROST_ROUNDS', title: 'Cryo Core', desc: 'Bullets slow boss attacks', rarity: 'RARE', weapon: 'GUN', run: () => player.frostRounds += 0.5 },
-    { id: 'DRONE_PILOT_MK2', title: 'Drone Mk2', desc: 'Mk1 orbits detach & shoot 2x', rarity: 'LEGENDARY', run: () => { 
-        player.drones.forEach(d => { d.mk2 = true; }); 
-        player.dronesMk2 = true; 
-    } },
-    { id: 'REACTIVE_ARMOR', title: 'Reactive Core', desc: 'Release nova when hit', rarity: 'RARE', run: () => player.reactiveArmor++ },
-    { id: 'LAST_STAND', title: 'Final Protocol', desc: 'Invuln on fatal hit (1/run)', rarity: 'LEGENDARY', run: () => player.lastStandUsed = false },
-    { id: 'TITAN_PLATE', title: 'Titan Plate', desc: 'Max HP +5, move speed -20%', rarity: 'RARE', run: () => { player.maxHealth += 5; player.health += 5; playerMoveSpeed *= 0.8; updateHealthUI(); } },
-    { id: 'SHARP_SHOOTER', title: 'Sharp Shooter', desc: 'DMG +50% at long range', rarity: 'RARE', weapon: 'GUN', run: () => player.sharpShooter = true },
-    { id: 'SNIPER_ROUND', title: 'Sniper Core', desc: 'Pierce +1, Spd +50%, DMG +10', rarity: 'EPIC', weapon: 'GUN', run: () => { player.pierce = (player.pierce || 0) + 1; PLAYER_BULLET_SPEED *= 1.5; player.damage += 10; } },
-    { id: 'SCATTERGUN', title: 'Scatter Core', desc: '+3 Projectiles, -40% DMG', rarity: 'EPIC', weapon: 'GUN', run: () => { player.multishot += 3; player.damage = Math.max(1, player.damage * 0.6); } },
-    { id: 'WHIRLWIND', title: 'Whirlwind', desc: 'Attacks hit all around you', rarity: 'LEGENDARY', weapon: 'SWORD', run: () => { player.whirlwind = true; } },
-    { id: 'THROWING_SWORD', title: 'Spectral Blade', desc: 'Throw swords like bullets. Enables Gun cards!', rarity: 'LEGENDARY', weapon: 'SWORD', run: () => { player.throwingSword = true; } },
-    { id: 'VAMPIRIC_STRIKE', title: 'Vampiric Edge', desc: 'High lifesteal, Max HP -2', rarity: 'EPIC', weapon: 'SWORD', run: () => { player.lifesteal = (player.lifesteal || 0) + 0.1; player.maxHealth = Math.max(1, player.maxHealth - 2); player.health = Math.min(player.health, player.maxHealth); updateHealthUI(); } },
-    { id: 'XP_BOOST', title: 'Core Extractor', desc: 'Bosses grant +25% more XP', rarity: 'LEGENDARY', run: () => { player.xpMultiplier = (player.xpMultiplier || 1.0) + 0.25; } }
+    { id: 'DAMAGE', title: 'Kinetic Amp', rarity: 'COMMON', buff: 'Core damage +5', defect: 'Max HP -1', run: () => { player.damage += 5; player.maxHealth = Math.max(1, player.maxHealth - 1); player.health = Math.min(player.health, player.maxHealth); updateHealthUI(); } },
+    { id: 'FIRE_RATE', title: 'Overclock', rarity: 'RARE', buff: 'Firing rate +25%', defect: 'Movement speed -10%', run: () => { PLAYER_FIRE_RATE *= 0.75; playerMoveSpeed *= 0.9; } },
+    { id: 'MULTISHOT', title: 'Split Core', rarity: 'EPIC', weapon: 'GUN', buff: '+1 Bullet', defect: 'Damage -3', run: () => { player.multishot++; player.damage = Math.max(1, player.damage - 3); } },
+    { id: 'HEALTH', title: 'Repair Nano', rarity: 'COMMON', buff: '+2 Max HP, heal 5', defect: 'Move speed -5%', run: () => { player.maxHealth += 2; player.health = Math.min(player.maxHealth, player.health + 5); playerMoveSpeed *= 0.95; updateHealthUI(); } },
+    { id: 'SPEED', title: 'Photon Accel', rarity: 'COMMON', weapon: 'GUN', buff: 'Bullet speed +25%', defect: 'Bullet size -20%', run: () => { PLAYER_BULLET_SPEED *= 1.25; player.bulletSize *= 0.8; } },
+    { id: 'HOMING', title: 'Seeker Core', rarity: 'RARE', weapon: 'GUN', buff: 'Homing +0.15', defect: 'Damage -2', run: () => { player.homing = (player.homing || 0) + 0.15; player.damage = Math.max(1, player.damage - 2); } },
+    { id: 'SIZE', title: 'Mass Pulse', rarity: 'COMMON', buff: 'Attack size +50%', defect: 'Bullet speed -15%', run: () => { player.bulletSize = (player.bulletSize || 6) * 1.5; PLAYER_BULLET_SPEED *= 0.85; } },
+    { id: 'LIFESTEAL', title: 'Siphon Soul', rarity: 'EPIC', buff: '3% Heal chance', defect: 'Max HP -2', run: () => { player.lifesteal = (player.lifesteal || 0) + 0.03; player.maxHealth = Math.max(1, player.maxHealth - 2); player.health = Math.min(player.health, player.maxHealth); updateHealthUI(); } },
+    { id: 'PIERCE', title: 'Void Shell', rarity: 'RARE', weapon: 'GUN', buff: 'Pierce +1', defect: 'Fire rate -10%', run: () => { player.pierce = (player.pierce || 0) + 1; PLAYER_FIRE_RATE *= 1.1; } },
+    { id: 'CRIT', title: 'Logic Fault', rarity: 'EPIC', buff: '+10% Crit chance', defect: 'Base damage -1', run: () => { player.crit = (player.crit || 0) + 0.1; player.damage = Math.max(1, player.damage - 1); } },
+    { id: 'CHARGE_SHOT', title: 'Fusion Pulse', rarity: 'EPIC', weapon: 'GUN', buff: 'Enable Charge Shot', defect: 'Standard damage -2', run: () => { player.hasChargeShot = true; player.damage = Math.max(1, player.damage - 2); } },
+    { id: 'BIGGER_SIZE', title: 'Titan Core', rarity: 'RARE', weapon: 'GUN', buff: 'Bullet size +100%', defect: 'Move speed -10%', run: () => { player.bulletSize = (player.bulletSize || 6) * 2; playerMoveSpeed *= 0.9; } },
+    { id: 'MOVE_SPEED', title: 'Turbo Thruster', rarity: 'COMMON', buff: 'Move speed +30%', defect: 'Jump force -15%', run: () => { playerMoveSpeed *= 1.3; jumpForce *= 0.85; } },
+    { id: 'RICOCHET', title: 'Ricochet', rarity: 'RARE', weapon: 'GUN', buff: 'Bounce +1', defect: 'Bullet speed -20%', run: () => { player.bounces++; PLAYER_BULLET_SPEED *= 0.8; } },
+    { id: 'REAR_GUARD', title: 'Rear Guard', rarity: 'RARE', weapon: 'GUN', buff: 'Backshot +1', defect: 'Fire rate -5%', run: () => { player.backshot++; PLAYER_FIRE_RATE *= 1.05; } },
+    { id: 'JUMP_JET', title: 'Jump Jet', rarity: 'COMMON', buff: 'Jump Force +25%', defect: 'Max HP -1', run: () => { jumpForce *= 1.25; player.maxHealth = Math.max(1, player.maxHealth - 1); player.health = Math.min(player.health, player.maxHealth); updateHealthUI(); } },
+    { id: 'ARMOR', title: 'Ceramic Plate', rarity: 'RARE', buff: '20% Armor', defect: 'Move speed -10%', run: () => { player.armor = (player.armor || 0) + 0.2; playerMoveSpeed *= 0.9; } },
+    { id: 'GLASS_CANNON', title: 'Glass Cannon', rarity: 'EPIC', buff: 'Damage +20', defect: 'Max HP -5', run: () => { player.damage += 20; player.maxHealth = Math.max(1, player.maxHealth - 5); player.health = Math.min(player.health, player.maxHealth); updateHealthUI(); } },
+    { id: 'LONG_BARREL', title: 'Long Barrel', rarity: 'COMMON', weapon: 'GUN', buff: 'Range +50%', defect: 'Move speed -5%', run: () => { player.bulletLife *= 1.5; playerMoveSpeed *= 0.95; } },
+    { id: 'STEADY_AIM', title: 'Steady Aim', rarity: 'RARE', weapon: 'GUN', buff: 'Rate & Spd +20%', defect: 'Bullet size -30%', run: () => { PLAYER_FIRE_RATE *= 0.8; PLAYER_BULLET_SPEED *= 1.2; player.bulletSize *= 0.7; } },
+    { id: 'QUICK_RELOAD', title: 'Quick Fire', rarity: 'COMMON', weapon: 'GUN', buff: 'Rate +15%', defect: 'Damage -1', run: () => { PLAYER_FIRE_RATE *= 0.85; player.damage = Math.max(1, player.damage - 1); } },
+    { id: 'SOLAR_PANEL', title: 'Solar Core', rarity: 'RARE', weapon: 'GUN', buff: 'Charge Speed 1.5x', defect: 'Max HP -1', run: () => { player.chargeSpeed *= 1.5; player.maxHealth = Math.max(1, player.maxHealth - 1); player.health = Math.min(player.health, player.maxHealth); updateHealthUI(); } },
+    { id: 'HULL_HARDER', title: 'Hardened Hull', rarity: 'RARE', buff: 'Max HP +4', defect: 'Move speed -20%', run: () => { player.maxHealth += 4; player.health += 4; playerMoveSpeed *= 0.8; updateHealthUI(); } },
+    { id: 'EXPLOSIVE', title: 'Nitro Core', rarity: 'EPIC', weapon: 'GUN', buff: 'Explosions', defect: 'Fire rate -20%', run: () => { player.explosive = (player.explosive || 0) + 1; PLAYER_FIRE_RATE *= 1.25; } },
+    { id: 'SPLIT_SHOT', title: 'Fission Shell', rarity: 'EPIC', weapon: 'GUN', buff: 'Splitting Bullets', defect: 'Bullet speed -30%', run: () => { player.splitting = (player.splitting || 0) + 1; PLAYER_BULLET_SPEED *= 0.7; } },
+    { id: 'BERSERKER', title: 'Berserker Engine', rarity: 'RARE', buff: 'Rate up as HP drops', defect: 'Max HP -2', run: () => { player.berserker = 1; player.maxHealth = Math.max(1, player.maxHealth - 2); player.health = Math.min(player.health, player.maxHealth); updateHealthUI(); } },
+    { id: 'DRONE_PILOT', title: 'Drone Mk1', rarity: 'EPIC', buff: 'Tactical Drone', defect: 'Damage -5', run: () => { player.drones.push({ angle: Math.random() * Math.PI * 2, fireCooldown: 0, x: player.x, y: player.y, mk2: player.dronesMk2 }); player.damage = Math.max(1, player.damage - 5); } },
+    { id: 'FROST_ROUNDS', title: 'Cryo Core', rarity: 'RARE', weapon: 'GUN', buff: 'Freeze Bullets', defect: 'Fire rate -10%', run: () => { player.frostRounds += 0.5; PLAYER_FIRE_RATE *= 1.1; } },
+    { id: 'DRONE_PILOT_MK2', title: 'Drone Mk2', rarity: 'LEGENDARY', buff: 'Detached Drones', defect: 'Max HP -3', run: () => { player.drones.forEach(d => { d.mk2 = true; }); player.dronesMk2 = true; player.maxHealth = Math.max(1, player.maxHealth - 3); player.health = Math.min(player.health, player.maxHealth); updateHealthUI(); } },
+    { id: 'REACTIVE_ARMOR', title: 'Reactive Core', rarity: 'RARE', buff: 'Revenge Nova', defect: 'Move speed -5%', run: () => { player.reactiveArmor++; playerMoveSpeed *= 0.95; } },
+    { id: 'LAST_STAND', title: 'Final Protocol', rarity: 'LEGENDARY', buff: 'Invuln on Death', defect: 'Max HP -4', run: () => { player.lastStandUsed = false; player.maxHealth = Math.max(1, player.maxHealth - 4); player.health = Math.min(player.health, player.maxHealth); updateHealthUI(); } },
+    { id: 'TITAN_PLATE', title: 'Titan Plate', rarity: 'RARE', buff: 'Max HP +5', defect: 'Move speed -25%', run: () => { player.maxHealth += 5; player.health += 5; playerMoveSpeed *= 0.75; updateHealthUI(); } },
+    { id: 'SHARP_SHOOTER', title: 'Sharp Shooter', rarity: 'RARE', weapon: 'GUN', buff: 'Dist DMG +50%', defect: 'Bullet size -40%', run: () => { player.sharpShooter = true; player.bulletSize *= 0.6; } },
+    { id: 'SNIPER_ROUND', title: 'Sniper Core', rarity: 'EPIC', weapon: 'GUN', buff: '+Pierce & Spd', defect: 'Fire rate -30%', run: () => { player.pierce = (player.pierce || 0) + 1; PLAYER_BULLET_SPEED *= 1.5; player.damage += 10; PLAYER_FIRE_RATE *= 1.3; } },
+    { id: 'SCATTERGUN', title: 'Scatter Core', rarity: 'EPIC', weapon: 'GUN', buff: '+3 Bullets', defect: 'Damage -60%', run: () => { player.multishot += 3; player.damage = Math.max(1, player.damage * 0.4); } },
+    { id: 'WHIRLWIND', title: 'Whirlwind', rarity: 'LEGENDARY', weapon: 'SWORD', buff: '360 Hit', defect: 'Jump force -20%', run: () => { player.whirlwind = true; jumpForce *= 0.8; } },
+    { id: 'THROWING_SWORD', title: 'Spectral Blade', rarity: 'LEGENDARY', weapon: 'SWORD', buff: 'Ranged Swords', defect: 'Sword damage -5', run: () => { player.throwingSword = true; player.damage = Math.max(1, player.damage - 5); } },
+    { id: 'VAMPIRIC_STRIKE', title: 'Vampiric Edge', rarity: 'EPIC', weapon: 'SWORD', buff: 'Huge Lifesteal', defect: 'Max HP -4', run: () => { player.lifesteal = (player.lifesteal || 0) + 0.1; player.maxHealth = Math.max(1, player.maxHealth - 4); player.health = Math.min(player.health, player.maxHealth); updateHealthUI(); } },
+    { id: 'XP_BOOST', title: 'Core Extractor', rarity: 'LEGENDARY', buff: 'XP Multi +25%', defect: 'Max HP -1', run: () => { player.xpMultiplier = (player.xpMultiplier || 1.0) + 0.25; player.maxHealth = Math.max(1, player.maxHealth - 1); player.health = Math.min(player.health, player.maxHealth); updateHealthUI(); } }
 ];
 
 const BOOMERANG_UPGRADES = [
-    { id: 'BOOMERANG_EXTRA', title: 'Twin Orbit', desc: '+1 Boomerang', rarity: 'EPIC', weapon: 'BOOMERANG', run: () => player.boomerangCount++ },
-    { id: 'BOOMERANG_DMG', title: 'Sharp Edge', desc: 'Boomerang damage +10', rarity: 'COMMON', weapon: 'BOOMERANG', run: () => player.boomerangDamage += 10 },
-    { id: 'BOOMERANG_RANGE', title: 'Far Reach', desc: 'Boomerang range +40%', rarity: 'COMMON', weapon: 'BOOMERANG', run: () => player.boomerangRange *= 1.4 },
-    { id: 'BOOMERANG_FROST', title: 'Glacial Blade', desc: 'Boomerangs slow enemies', rarity: 'RARE', weapon: 'BOOMERANG', run: () => player.boomerangFrost += 0.3 },
-    { id: 'BOOMERANG_SPEED', title: 'Quick Return', desc: 'Boomerang speed +30%', rarity: 'RARE', weapon: 'BOOMERANG', run: () => { player.boomerangSpeed *= 1.3; player.boomerangReturnSpeed *= 1.3; } }
+    { id: 'BOOMERANG_EXTRA', title: 'Twin Orbit', rarity: 'EPIC', weapon: 'BOOMERANG', buff: '+1 Boomerang', defect: 'Damage -3', run: () => { player.boomerangCount++; player.boomerangDamage = Math.max(1, player.boomerangDamage - 3); } },
+    { id: 'BOOMERANG_DMG', title: 'Sharp Edge', rarity: 'COMMON', weapon: 'BOOMERANG', buff: 'DMG +10', defect: 'Speed -15%', run: () => { player.boomerangDamage += 10; player.boomerangSpeed *= 0.85; } },
+    { id: 'BOOMERANG_RANGE', title: 'Far Reach', rarity: 'COMMON', weapon: 'BOOMERANG', buff: 'Range +40%', defect: 'Return Speed -20%', run: () => { player.boomerangRange *= 1.4; player.boomerangReturnSpeed *= 0.8; } },
+    { id: 'BOOMERANG_FROST', title: 'Glacial Blade', rarity: 'RARE', weapon: 'BOOMERANG', buff: 'Freeze Hits', defect: 'Damage -5', run: () => { player.boomerangFrost += 0.3; player.boomerangDamage = Math.max(1, player.boomerangDamage - 5); } },
+    { id: 'BOOMERANG_SPEED', title: 'Quick Return', rarity: 'RARE', weapon: 'BOOMERANG', buff: 'Speed +30%', defect: 'Size -20%', run: () => { player.boomerangSpeed *= 1.3; player.boomerangReturnSpeed *= 1.3; player.boomerangSize *= 0.8; } }
 ];
 
 const GRENADE_UPGRADES = [
-    { id: 'GRENADE_COUNT', title: 'Cluster Pack', desc: '+1 Grenade', rarity: 'EPIC', weapon: 'GRENADE', run: () => player.grenadeCount++ },
-    { id: 'GRENADE_RADIUS', title: 'Blast Shield', desc: 'Explosion radius +50%', rarity: 'RARE', weapon: 'GRENADE', run: () => player.grenadeRadius *= 1.5 },
-    { id: 'GRENADE_DMG', title: 'Heavy Payload', desc: 'Grenade damage +20', rarity: 'COMMON', weapon: 'GRENADE', run: () => player.grenadeDamage += 20 },
-    { id: 'GRENADE_FRAG', title: 'Shrapnel', desc: 'Releases fragment bullets', rarity: 'EPIC', weapon: 'GRENADE', run: () => player.grenadeFrags += 4 },
-    { id: 'GRENADE_BOUNCE', title: 'Rubber Shell', desc: 'Extra bounce before blast', rarity: 'COMMON', weapon: 'GRENADE', run: () => player.grenadeBounces++ }
+    { id: 'GRENADE_COUNT', title: 'Cluster Pack', rarity: 'EPIC', weapon: 'GRENADE', buff: '+1 Grenade', defect: 'Radius -20%', run: () => { player.grenadeCount++; player.grenadeRadius *= 0.8; } },
+    { id: 'GRENADE_RADIUS', title: 'Blast Shield', rarity: 'RARE', weapon: 'GRENADE', buff: 'Radius +50%', defect: 'Damage -10', run: () => { player.grenadeRadius *= 1.5; player.grenadeDamage = Math.max(1, player.grenadeDamage - 10); } },
+    { id: 'GRENADE_DMG', title: 'Heavy Payload', rarity: 'COMMON', weapon: 'GRENADE', buff: 'DMG +20', defect: 'Bounces -1', run: () => { player.grenadeDamage += 20; player.grenadeBounces = Math.max(0, player.grenadeBounces - 1); } },
+    { id: 'GRENADE_FRAG', title: 'Shrapnel', rarity: 'EPIC', weapon: 'GRENADE', buff: 'Release Fragments', defect: 'Radius -30%', run: () => { player.grenadeFrags += 4; player.grenadeRadius *= 0.7; } },
+    { id: 'GRENADE_BOUNCE', title: 'Rubber Shell', rarity: 'COMMON', weapon: 'GRENADE', buff: 'Extra Bounce', defect: 'Damage -5', run: () => { player.grenadeBounces++; player.grenadeDamage = Math.max(1, player.grenadeDamage - 5); } }
 ];
 
 const ALL_UPGRADES = [...UPGRADES, ...BOOMERANG_UPGRADES, ...GRENADE_UPGRADES];
@@ -1308,36 +1471,44 @@ function showUpgradeScreen() {
     const selection = shuffled.slice(0, 3);
     
     selection.forEach(up => {
-        let displayDesc = up.desc;
+        let displayBuff = up.buff || "---";
+        let displayDefect = up.defect || "---";
         let displayTitle = up.title;
         
         if (player.weaponType === 'SWORD' && !player.throwingSword) {
-            if (up.id === 'FIRE_RATE') displayDesc = 'Swing speed +25%';
-            if (up.id === 'MULTISHOT') { displayTitle = 'Dual Edge'; displayDesc = 'Wider swing arc'; }
-            if (up.id === 'SPEED') { displayTitle = 'Long Reach'; displayDesc = 'Sword length +25%'; }
-            if (up.id === 'HOMING') { displayTitle = 'Lunge Core'; displayDesc = 'Lunge toward boss on swing'; }
-            if (up.id === 'SIZE') displayDesc = 'Sword width/impact +50%';
-            if (up.id === 'CHARGE_SHOT') { displayTitle = 'Fusion Blade'; displayDesc = 'Hold to charge heavy swing'; }
-            if (up.id === 'LONG_BARREL') displayDesc = 'Sword length +50%';
-            if (up.id === 'STEADY_AIM') displayDesc = 'Swing speed & Spd +20%';
-            if (up.id === 'QUICK_RELOAD') displayDesc = 'Swing speed +15%';
-            if (up.id === 'FROST_ROUNDS') displayDesc = 'Hits slow boss attacks';
-            if (up.id === 'SHARP_SHOOTER') { displayTitle = 'Executioner'; displayDesc = 'DMG +50% to distant bosses'; }
+            if (up.id === 'FIRE_RATE') displayBuff = 'Swing speed +25%';
+            if (up.id === 'MULTISHOT') { displayTitle = 'Dual Edge'; displayBuff = 'Wider swing arc'; }
+            if (up.id === 'SPEED') { displayTitle = 'Long Reach'; displayBuff = 'Sword length +25%'; }
+            if (up.id === 'HOMING') { displayTitle = 'Lunge Core'; displayBuff = 'Lunge toward boss on swing'; }
+            if (up.id === 'SIZE') displayBuff = 'Sword width/impact +50%';
+            if (up.id === 'CHARGE_SHOT') { displayTitle = 'Fusion Blade'; displayBuff = 'Hold to charge heavy swing'; }
+            if (up.id === 'LONG_BARREL') displayBuff = 'Sword length +50%';
+            if (up.id === 'STEADY_AIM') displayBuff = 'Swing speed & Spd +20%';
+            if (up.id === 'QUICK_RELOAD') displayBuff = 'Swing speed +15%';
+            if (up.id === 'FROST_ROUNDS') displayBuff = 'Hits slow boss attacks';
+            if (up.id === 'SHARP_SHOOTER') { displayTitle = 'Executioner'; displayBuff = 'DMG +50% to distant bosses'; }
         }
 
         if (player.weaponType === 'GRENADE') {
-            if (up.id === 'FIRE_RATE') displayDesc = 'Throw rate +25%';
-            if (up.id === 'SIZE') { displayTitle = 'Big Bang'; displayDesc = 'Explosion radius +50%'; }
-            if (up.id === 'DAMAGE') displayDesc = 'Explosion damage +5';
+            if (up.id === 'FIRE_RATE') displayBuff = 'Throw rate +25%';
+            if (up.id === 'SIZE') { displayTitle = 'Big Bang'; displayBuff = 'Explosion radius +50%'; }
+            if (up.id === 'DAMAGE') displayBuff = 'Explosion damage +5';
         }
 
         const card = document.createElement('div');
         card.className = `upgrade-card ${up.rarity}`;
         card.innerHTML = `
             <div class="rarity">${up.rarity}</div>
-            <h3>${displayTitle}</h3>
-            <p>${displayDesc}</p>
-            <div class="rarity" style="opacity: 0.3">SELECT</div>
+            <h3 style="margin-bottom: 5px;">${displayTitle}</h3>
+            <div style="text-align: left; background: rgba(46, 213, 115, 0.1); padding: 5px; border-radius: 4px; margin-bottom: 5px; font-size: 11px;">
+                <span style="color: #2ed573; font-weight: bold; font-size: 9px; display: block;">Buff:</span>
+                ${displayBuff}
+            </div>
+            <div style="text-align: left; background: rgba(255, 71, 87, 0.1); padding: 5px; border-radius: 4px; font-size: 11px;">
+                <span style="color: #ff4757; font-weight: bold; font-size: 9px; display: block;">Downside:</span>
+                ${displayDefect}
+            </div>
+            <div class="rarity" style="opacity: 0.3; margin-top: 10px;">SELECT</div>
         `;
         card.onclick = () => {
             up.run();
@@ -1382,7 +1553,7 @@ window.showIndex = function() {
         el.innerHTML = `
             <div class="rarity">${up.rarity}</div>
             <h3 style="font-size: 14px;">${isCollected ? up.title : '???'}</h3>
-            <p style="font-size: 10px;">${isCollected ? up.desc : 'Unlocked by finding in runs'}</p>
+            <p style="font-size: 10px;">${isCollected ? (up.buff + " | " + up.defect) : 'Unlocked by finding in runs'}</p>
         `;
         grid.appendChild(el);
     });
@@ -1403,7 +1574,7 @@ window.showSandbox = function() {
         lbl.style.alignItems = 'center';
         lbl.style.gap = '10px';
         lbl.style.fontSize = '12px';
-        lbl.title = up.desc; // Add tooltip for hover
+        lbl.title = up.buff + " | " + up.defect; // Add tooltip for hover
         lbl.innerHTML = `<input type="number" min="0" max="100" value="0" class="sandbox-up-input" data-id="${up.id}" style="width: 45px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; padding: 2px;"> <span>${up.title}</span>`;
         upList.appendChild(lbl);
     });
@@ -1571,13 +1742,13 @@ function bossTakeDamage(target, amount = player.damage) {
         sfx.win();
         
         // Final burst of XP Orbs
-        for(let i=0; i<20; i++) {
+        for(let i=0; i<15; i++) {
             xpOrbs.push({
                 x: target.x + target.width / 2,
                 y: target.y + target.height / 2,
                 vx: (Math.random() - 0.5) * 600,
                 vy: -Math.random() * 500 - 200,
-                value: 0.5, // Reduced from 1
+                value: 0.2, 
                 homingDelay: 1.0 + Math.random() * 1.5 
             });
         }
@@ -3437,10 +3608,7 @@ function draw() {
     if (player.invuln > 0 && Math.floor(gameTime * 20) % 2 === 0) {
         // Blink
     } else {
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = player.color;
-        ctx.fillStyle = player.color;
-        ctx.fillRect(player.x, player.y, player.width, player.height);
+        drawPlayerAvatar(ctx, player.x, player.y, player.width, player.height, player.color, player.eyeStyle);
 
         // Charge indicator
         if (player.isCharging && player.chargeTime > 0.1) {
@@ -4022,21 +4190,163 @@ function draw() {
     ctx.restore();
 }
 
-// Expose functions for inline HTML event handlers (since script is now type="module")
+// --- CHARACTER CREATION & ONBOARDING ---
+let creationStep = 1;
+let creationStats = {
+    speed: 0,
+    jump: 0,
+    damage: 0,
+    crit: 0,
+    firerate: 0
+};
+let creationPointsRemaining = 508;
+
+window.nextCreationStep = function() {
+    if (creationStep === 1) {
+        document.getElementById('creation-step-1').style.display = 'none';
+        document.getElementById('creation-step-2').style.display = 'block';
+        creationStep = 2;
+    } else if (creationStep === 2) {
+        document.getElementById('creation-step-1').style.display = 'block';
+        document.getElementById('creation-step-2').style.display = 'none';
+        creationStep = 1;
+    }
+};
+
+window.updateCreationStats = function() {
+    const stats = ['speed', 'jump', 'damage', 'crit', 'firerate'];
+    let total = 0;
+    
+    // First pass: calculate total
+    stats.forEach(s => {
+        total += parseInt(document.getElementById(`slider-${s}`).value);
+    });
+
+    // If over limit, we need to adjust the sliders
+    if (total > 508) {
+        // We find which slider was just changed or simply cap the values logic
+        // For simplicity with sliders, we can just prevent the overflow
+        // Find which one was bumped? Actually easier to just cap the slider values manually in a more "clamped" way
+        // But a standard pattern is: if sum > total, subtract from others or just clamp current.
+        // Let's just track old values to see which one changed.
+    }
+    
+    // Re-calculating based on values
+    // Using a simple logic: as you move a slider, if you're out of points, it pushes the others down OR just stops moving.
+    // "Stopped moving" is usually better for users.
+    
+    let currentSum = 0;
+    stats.forEach(s => {
+        let val = parseInt(document.getElementById(`slider-${s}`).value);
+        if (currentSum + val > 508) {
+             val = 508 - currentSum;
+             document.getElementById(`slider-${s}`).value = val;
+        }
+        currentSum += val;
+        creationStats[s] = val;
+        document.getElementById(`val-${s}`).innerText = val;
+    });
+
+    creationPointsRemaining = 508 - currentSum;
+    document.getElementById('stat-points-remaining').innerText = creationPointsRemaining;
+    
+    // SFX on change
+    if (Math.random() < 0.2) sfx.click();
+};
+
+function adminResetStats() {
+    if (confirm("THIS WILL COMPLETELY WIPE ALL DATA: Stats, Progress, Highscores, and Customization. The app will act as if you've never visited before. Are you sure?")) {
+        localStorage.clear();
+        alert("Memory purged. Restarting initial sequence...");
+        window.location.reload();
+    }
+}
+window.adminResetStats = adminResetStats;
+
+window.finalizeCreation = function() {
+    // Save stats to localStorage
+    localStorage.setItem('stat_speed', creationStats.speed);
+    localStorage.setItem('stat_jump', creationStats.jump);
+    localStorage.setItem('stat_damage', creationStats.damage);
+    localStorage.setItem('stat_crit', creationStats.crit);
+    localStorage.setItem('stat_firerate', creationStats.firerate);
+    
+    localStorage.setItem('firstTimeSetupComplete', 'true');
+    
+    // Apply stats to current player instance
+    player.damage += creationStats.damage;
+    player.crit += creationStats.crit / 100;
+    playerMoveSpeed += creationStats.speed * 2;
+    jumpForce -= creationStats.jump * 5;
+    PLAYER_FIRE_RATE *= (1 - (creationStats.firerate / 1000));
+    
+    document.getElementById('creation-screen').style.display = 'none';
+    gameState = 'START';
+    showTitle();
+    sfx.win();
+};
+
+window.cycleColor = function() {
+    const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6', '#ecf0f1', '#e67e22', '#34495e'];
+    let idx = colors.indexOf(player.color);
+    player.color = colors[(idx + 1) % colors.length];
+    localStorage.setItem('playerColor', player.color);
+    renderAvatarPreview();
+    sfx.click();
+};
+
+window.cycleEyes = function() {
+    let idx = EYE_STYLES.indexOf(player.eyeStyle);
+    player.eyeStyle = EYE_STYLES[(idx + 1) % EYE_STYLES.length];
+    localStorage.setItem('playerEyeStyle', player.eyeStyle);
+    renderAvatarPreview();
+    sfx.click();
+};
+
+window.cycleHat = function() {
+    let idx = HAT_STYLES.indexOf(player.hat);
+    player.hat = HAT_STYLES[(idx + 1) % HAT_STYLES.length];
+    localStorage.setItem('playerHat', player.hat);
+    renderAvatarPreview();
+    sfx.click();
+};
+
+function checkOnboarding() {
+    if (!localStorage.getItem('firstTimeSetupComplete')) {
+        gameState = 'CREATION';
+        const screen = document.getElementById('creation-screen');
+        if (screen) {
+            screen.style.display = 'flex';
+            renderAvatarPreview();
+        }
+    } else {
+        // Load stats if they exist
+        player.damage += parseInt(localStorage.getItem('stat_damage')) || 0;
+        player.crit += (parseInt(localStorage.getItem('stat_crit')) || 0) / 100;
+        playerMoveSpeed += (parseInt(localStorage.getItem('stat_speed')) || 0) * 2;
+        jumpForce -= (parseInt(localStorage.getItem('stat_jump')) || 0) * 5;
+        PLAYER_FIRE_RATE *= (1 - ((parseInt(localStorage.getItem('stat_firerate')) || 0) / 1000));
+    }
+}
+
+// Expose functions for inline HTML event handlers
 window.startGame = startGame;
 window.resetRun = resetRun;
 window.showControls = showControls;
 window.showTitle = showTitle;
+window.showAvatarEditor = showAvatarEditor;
 window.remapKey = remapKey;
 window.showAdminPanel = showAdminPanel;
 window.postAnnouncement = postAnnouncement;
 window.clearAnnouncement = clearAnnouncement;
 window.adminLogin = adminLogin;
+window.adminResetStats = adminResetStats;
 window.toggleMobileMode = toggleMobileMode;
 window.toggleSFX = toggleSFX;
 window.setPlayerSize = setPlayerSize;
 window.openDialogue = openDialogue;
 window.closeDialogue = closeDialogue;
 
-// START THE GAME
+// Initialization
+checkOnboarding();
 requestAnimationFrame(update);

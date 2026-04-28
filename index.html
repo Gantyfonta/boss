@@ -71,11 +71,21 @@
                 </div>
                 <div style="display: flex; gap: 10px;">
                     <button onclick="showControls()" style="flex: 1;">Controls</button>
+                    <button id="avatar-btn" onclick="showAvatarEditor()" style="flex: 1; background: #27ae60; box-shadow: 0 4px #219150;">Avatar</button>
                     <button onclick="showIndex()" style="flex: 1; background: #6c5ce7; box-shadow: 0 4px #5f27cd;">Index</button>
                 </div>
                 <button id="admin-panel-btn" onclick="showAdminPanel()" style="display: none; background: #3498db; box-shadow: 0 4px #2980b9;">Admin Panel</button>
             </div>
-            <p id="admin-login-link" onclick="adminLogin()" style="font-size: 10px; opacity: 0.3; margin-top: 20px; cursor: pointer;">Admin Login</p>
+            <div id="admin-auth-container" style="margin-top: 20px;">
+                <p id="admin-login-link" onclick="document.getElementById('admin-login-form').style.display='flex'; this.style.display='none';" style="font-size: 10px; opacity: 0.3; cursor: pointer;">Admin Login</p>
+                <div id="admin-login-form" style="display: none; flex-direction: column; gap: 8px; align-items: center;">
+                    <input type="password" id="admin-pass" placeholder="Admin Password" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 6px 12px; color: white; outline: none; width: 140px; font-size: 12px;">
+                    <div style="display: flex; gap: 5px;">
+                        <button onclick="submitAdminLogin()" style="padding: 4px 10px; font-size: 10px; background: #3498db;">LOGIN</button>
+                        <button onclick="document.getElementById('admin-login-form').style.display='none'; document.getElementById('admin-login-link').style.display='block';" style="padding: 4px 10px; font-size: 10px; background: #555;">CANCEL</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Index Screen -->
@@ -85,6 +95,117 @@
                 <!-- Filled by JS -->
             </div>
             <button onclick="showTitle()" style="background: #555; box-shadow: 0 4px #333;">Back to Menu</button>
+        </div>
+
+        <!-- Avatar Editor Screen -->
+        <div id="avatar-screen" class="overlay" style="display: none;">
+            <h2>AVATAR EDITOR</h2>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 20px; width: 300px;">
+                <div id="avatar-preview-container" style="width: 100px; height: 100px; background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.2); border-radius: 12px; display: flex; justify-content: center; align-items: center;">
+                    <canvas id="avatarCanvas" width="60" height="60"></canvas>
+                </div>
+                
+                <div style="width: 100%; text-align: left;">
+                    <p style="margin: 0 0 10px 0; font-size: 14px; color: var(--accent-gold);">BODY COLOR</p>
+                    <div id="color-options" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+
+                <div style="width: 100%; text-align: left;">
+                    <p style="margin: 0 0 10px 0; font-size: 14px; color: var(--accent-gold);">EYE STYLE</p>
+                    <div id="eye-options" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+
+                <div style="width: 100%; text-align: left;">
+                    <p style="margin: 0 0 10px 0; font-size: 14px; color: var(--accent-gold);">HAT</p>
+                    <div id="hat-options" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+            </div>
+            <button onclick="showTitle()" style="margin-top: 30px; background: #555; box-shadow: 0 4px #333;">Back to Menu</button>
+        </div>
+
+        <!-- First Time Creation Screen -->
+        <div id="creation-screen" class="overlay" style="display: none; background: #0a0a0a;">
+            <p style="color: var(--accent-gold); letter-spacing: 2px; font-size: 12px;">NEW USER DETECTED</p>
+            <h2>INITIALIZE PROTOCOL</h2>
+            
+            <div id="creation-steps" style="width: 100%; max-width: 500px;">
+                <!-- Step 1: Avatar -->
+                <div id="creation-step-1" class="creation-step">
+                    <h3>DESIGN AVATAR</h3>
+                    <div style="display: flex; gap: 20px; align-items: flex-start; justify-content: center; background: rgba(255,255,255,0.02); padding: 20px; border-radius: 12px;">
+                        <div id="creation-avatar-preview" style="width: 120px; height: 120px; background: rgba(0,0,0,0.3); border: 2px solid var(--accent-blue); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                            <canvas id="creationCanvas" width="80" height="80"></canvas>
+                        </div>
+                        <div style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
+                             <!-- Simplified controls for creation flow -->
+                             <button onclick="cycleColor(1)" style="padding: 10px;">CYCLE COLOR</button>
+                             <button onclick="cycleEyes(1)" style="padding: 10px;">CYCLE EYES</button>
+                             <button onclick="cycleHat(1)" style="padding: 10px;">CYCLE HAT</button>
+                        </div>
+                    </div>
+                    <button onclick="nextCreationStep(2)" style="margin-top: 30px; width: 100%; background: var(--accent-blue);">PROCEED TO CALIBRATION</button>
+                </div>
+
+                <!-- Step 2: Stats -->
+                <div id="creation-step-2" class="creation-step" style="display: none;">
+                    <h3>CALIBRATE CORE STATS</h3>
+                    <p style="font-size: 14px; opacity: 0.7; margin-bottom: 20px;">Allocation Points Remaining: <span id="stat-points-remaining" style="color: var(--accent-gold); font-weight: bold;">508</span></p>
+                    
+                    <div id="stat-allocation-list" style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 30px;">
+                        <!-- Stat Sliders -->
+                        <div class="stat-row" style="display: flex; flex-direction: column; gap: 5px; background: rgba(255,255,255,0.05); padding: 12px 15px; border-radius: 6px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 12px; letter-spacing: 1px;">
+                                <span>MOVEMENT SPEED</span>
+                                <span id="val-speed" style="color: var(--accent-blue); font-weight: bold;">0</span>
+                            </div>
+                            <input type="range" id="slider-speed" min="0" max="508" value="0" oninput="updateCreationStats()" style="width: 100%; accent-color: var(--accent-blue);">
+                        </div>
+
+                        <div class="stat-row" style="display: flex; flex-direction: column; gap: 5px; background: rgba(255,255,255,0.05); padding: 12px 15px; border-radius: 6px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 12px; letter-spacing: 1px;">
+                                <span>JUMP HEIGHT</span>
+                                <span id="val-jump" style="color: var(--accent-blue); font-weight: bold;">0</span>
+                            </div>
+                            <input type="range" id="slider-jump" min="0" max="508" value="0" oninput="updateCreationStats()" style="width: 100%; accent-color: var(--accent-blue);">
+                        </div>
+
+                        <div class="stat-row" style="display: flex; flex-direction: column; gap: 5px; background: rgba(255,255,255,0.05); padding: 12px 15px; border-radius: 6px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 12px; letter-spacing: 1px;">
+                                <span>CORE DAMAGE</span>
+                                <span id="val-damage" style="color: var(--accent-blue); font-weight: bold;">0</span>
+                            </div>
+                            <input type="range" id="slider-damage" min="0" max="508" value="0" oninput="updateCreationStats()" style="width: 100%; accent-color: var(--accent-blue);">
+                        </div>
+
+                        <div class="stat-row" style="display: flex; flex-direction: column; gap: 5px; background: rgba(255,255,255,0.05); padding: 12px 15px; border-radius: 6px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 12px; letter-spacing: 1px;">
+                                <span>CRIT CHANCE</span>
+                                <span id="val-crit" style="color: var(--accent-blue); font-weight: bold;">0</span>
+                            </div>
+                            <input type="range" id="slider-crit" min="0" max="508" value="0" oninput="updateCreationStats()" style="width: 100%; accent-color: var(--accent-blue);">
+                        </div>
+
+                        <div class="stat-row" style="display: flex; flex-direction: column; gap: 5px; background: rgba(255,255,255,0.05); padding: 12px 15px; border-radius: 6px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 12px; letter-spacing: 1px;">
+                                <span>FIRERATE</span>
+                                <span id="val-firerate" style="color: var(--accent-blue); font-weight: bold;">0</span>
+                            </div>
+                            <input type="range" id="slider-firerate" min="0" max="508" value="0" oninput="updateCreationStats()" style="width: 100%; accent-color: var(--accent-blue);">
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="nextCreationStep(1)" style="flex: 1; background: #555;">BACK</button>
+                        <button id="finalize-creation-btn" onclick="finalizeCreation()" style="flex: 2; background: #27ae60;">FINALIZE PROTOCOL</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Sandbox Screen -->
@@ -192,6 +313,8 @@
                     <button onclick="postAnnouncement()" style="flex: 1; padding: 10px;">Post/Update</button>
                     <button onclick="clearAnnouncement()" style="flex: 1; padding: 10px; background: #ff4757; box-shadow: 0 4px #c0392b;">Clear All</button>
                 </div>
+                <hr style="width: 100%; border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 10px 0;">
+                <button onclick="window.adminResetStats()" style="width: 100%; padding: 12px; background: #e67e22; color: white; font-weight: bold; border: none; border-radius: 4px; box-shadow: 0 4px #d35400; cursor: pointer; margin-top: 10px;">RESET ALL STATS & PROGRESS</button>
                 <hr style="width: 100%; border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 10px 0;">
                 <h3>Manage Scores</h3>
                 <div id="admin-highscore-list" style="max-height: 200px; overflow-y: auto; width: 100%; font-size: 14px;">
