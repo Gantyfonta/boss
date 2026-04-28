@@ -63,11 +63,12 @@
                     <button onclick="startInfiniteMode()" style="background: #e67e22; box-shadow: 0 4px #d35400; flex: 1;">Infinite</button>
                     <button onclick="showSandbox()" style="background: #9b59b6; box-shadow: 0 4px #8e44ad; flex: 1;">Sandbox</button>
                 </div>
-                <div style="display: flex; gap: 10px; margin: 10px 0;">
-                    <button id="weapon-gun" onclick="selectWeapon('GUN')" style="flex: 1; border: 2px solid var(--accent-blue);">GUN</button>
-                    <button id="weapon-sword" onclick="selectWeapon('SWORD')" style="flex: 1; opacity: 0.5;">SWORD</button>
-                    <button id="weapon-boomerang" onclick="selectWeapon('BOOMERANG')" style="flex: 1; opacity: 0.5;">BOOMERANG</button>
-                    <button id="weapon-grenade" onclick="selectWeapon('GRENADE')" style="flex: 1; opacity: 0.5;">GRENADE</button>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 10px 0;">
+                    <button id="weapon-gun" onclick="selectWeapon('GUN')" style="border: 2px solid var(--accent-blue);">GUN</button>
+                    <button id="weapon-sword" onclick="selectWeapon('SWORD')" style="opacity: 0.5;">SWORD</button>
+                    <button id="weapon-boomerang" onclick="selectWeapon('BOOMERANG')" style="opacity: 0.5;">BOOMERANG</button>
+                    <button id="weapon-grenade" onclick="selectWeapon('GRENADE')" style="opacity: 0.5;">GRENADE</button>
+                    <button id="weapon-wand" onclick="selectWeapon('WAND')" style="opacity: 0.5; color: #ff00ff;">WAND</button>
                 </div>
                 <div style="display: flex; gap: 10px;">
                     <button onclick="showControls()" style="flex: 1;">Controls</button>

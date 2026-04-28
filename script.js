@@ -84,6 +84,7 @@ const ARENA_FLOOR = 20;
 let mobileMode = localStorage.getItem('platformer_mobile') === 'true';
 let sfxEnabled = localStorage.getItem('platformer_sfx') !== 'false';
 let selectedWeapon = 'GUN';
+let DIFFICULTY_SCALING = 1.25; // Global difficulty modifier
 
 // --- CHANNEL SYSTEM ---
 let channelStates = {}; // Tracks activation state for lever/button channels
@@ -145,9 +146,9 @@ let randomPlatformTimer = 0;
 
 // --- BOSS FIGHT CONSTANTS ---
 const PLAYER_MAX_HEALTH_DEFAULT = 10;
-const BOSS_MAX_HEALTH = 750; // Nerfed from 1000
+const BOSS_MAX_HEALTH = 1250; // Increased difficulty from 750 (originally 1000)
 let PLAYER_BULLET_SPEED = 800;
-const INVULN_DURATION = 1.2;
+const INVULN_DURATION = 0.8; // Reduced invuln window from 1.2 for more challenge
 const BOSS_HIT_RESONANCE = 0.2; // Slightly lower resonance for bullets
 
 // --- BOSS ATTACK CONFIG ---
@@ -522,6 +523,10 @@ function createBoss(index) {
         hpMod *= 2.0;
         speedMod *= 0.6;
     }
+    
+    // Global Harder Scaling (25% harder on base health and speed)
+    hpMod *= DIFFICULTY_SCALING;
+    speedMod *= (1 + (DIFFICULTY_SCALING - 1) * 0.5);
     
     return {
         id: index,
@@ -974,22 +979,26 @@ function selectWeapon(type) {
     const swordBtn = document.getElementById('weapon-sword');
     const boomBtn = document.getElementById('weapon-boomerang');
     const greBtn = document.getElementById('weapon-grenade');
+    const wandBtn = document.getElementById('weapon-wand');
     
     // Reset all
     if (gunBtn) { gunBtn.style.border = 'none'; gunBtn.style.opacity = '0.5'; }
     if (swordBtn) { swordBtn.style.border = 'none'; swordBtn.style.opacity = '0.5'; }
     if (boomBtn) { boomBtn.style.border = 'none'; boomBtn.style.opacity = '0.5'; }
     if (greBtn) { greBtn.style.border = 'none'; greBtn.style.opacity = '0.5'; }
+    if (wandBtn) { wandBtn.style.border = 'none'; wandBtn.style.opacity = '0.5'; }
 
+    const highlight = '2px solid #00d2ff';
     if (type === 'GUN') {
-        if (gunBtn) { gunBtn.style.border = '2px solid #00d2ff'; gunBtn.style.opacity = '1'; }
+        if (gunBtn) { gunBtn.style.border = highlight; gunBtn.style.opacity = '1'; }
     } else if (type === 'SWORD') {
-        if (swordBtn) { swordBtn.style.border = '2px solid #00d2ff'; swordBtn.style.opacity = '1'; }
+        if (swordBtn) { swordBtn.style.border = highlight; swordBtn.style.opacity = '1'; }
     } else if (type === 'BOOMERANG') {
-        if (boomBtn) { boomBtn.style.border = '2px solid #00d2ff'; boomBtn.style.opacity = '1'; }
+        if (boomBtn) { boomBtn.style.border = highlight; boomBtn.style.opacity = '1'; }
     } else if (type === 'GRENADE') {
-        const greBtn = document.getElementById('weapon-grenade');
-        if (greBtn) { greBtn.style.border = '2px solid #00d2ff'; greBtn.style.opacity = '1'; }
+        if (greBtn) { greBtn.style.border = highlight; greBtn.style.opacity = '1'; }
+    } else if (type === 'WAND') {
+        if (wandBtn) { wandBtn.style.border = highlight; wandBtn.style.opacity = '1'; }
     }
 }
 
@@ -1144,11 +1153,15 @@ function initLevel() {
     // Grenade default stats
     player.grenadeDamage = 40;
     player.grenadeCount = 1;
-    player.grenadeRange = 300;
     player.grenadeRadius = 100;
-    player.grenadeBounces = 1;
+    player.grenadeBounces = 2;
     player.grenadeFrags = 0;
 
+    // Wand default stats
+    player.wandHomingPower = 1.0;
+    player.wandArcaneSpeed = 500;
+    
+    // Initialization flag cleanup (was duplicate lines)
     if (player.weaponType === 'SWORD') {
         player.damage = 25; // Base sword damage approx 2x bullet
         PLAYER_FIRE_RATE = 0.4; // Slower "fire" rate for sword
@@ -1158,6 +1171,9 @@ function initLevel() {
     } else if (player.weaponType === 'GRENADE') {
         player.damage = player.grenadeDamage;
         PLAYER_FIRE_RATE = 1.2;
+    } else if (player.weaponType === 'WAND') {
+        player.damage = 15;
+        PLAYER_FIRE_RATE = 0.6;
     } else {
         player.damage = 10;
         PLAYER_FIRE_RATE = 0.25;
@@ -1428,10 +1444,17 @@ const GRENADE_UPGRADES = [
     { id: 'GRENADE_BOUNCE', title: 'Rubber Shell', rarity: 'COMMON', weapon: 'GRENADE', buff: 'Extra Bounce', defect: 'Damage -5', run: () => { player.grenadeBounces++; player.grenadeDamage = Math.max(1, player.grenadeDamage - 5); } }
 ];
 
-const ALL_UPGRADES = [...UPGRADES, ...BOOMERANG_UPGRADES, ...GRENADE_UPGRADES];
+const WAND_UPGRADES = [
+    { id: 'WAND_AUTO', title: 'Sentient Will', rarity: 'LEGENDARY', weapon: 'WAND', buff: 'Faster Homing', defect: 'Damage -5', run: () => { player.wandHomingPower = (player.wandHomingPower || 1) * 2; player.damage = Math.max(1, player.damage - 5); } },
+    { id: 'WAND_ORBIT', title: 'Arcane Orbit', rarity: 'EPIC', weapon: 'WAND', buff: '+1 Orb', defect: 'Size -20%', run: () => { player.multishot++; player.bulletSize *= 0.8; } },
+    { id: 'WAND_LURK', title: 'Ghost Flame', rarity: 'RARE', weapon: 'WAND', buff: 'Duration +100%', defect: 'Fire rate -15%', run: () => { player.bulletLife *= 2; PLAYER_FIRE_RATE *= 1.15; } },
+    { id: 'WAND_SPLAT', title: 'Mana Burst', rarity: 'RARE', weapon: 'WAND', buff: 'Size +50%', defect: 'Move speed -5%', run: () => { player.bulletSize *= 1.5; playerMoveSpeed *= 0.95; } }
+];
+
+const ALL_UPGRADES = [...UPGRADES, ...BOOMERANG_UPGRADES, ...GRENADE_UPGRADES, ...WAND_UPGRADES];
 
 function checkLevelUp() {
-    let reqXP = Math.floor(1.8 * Math.pow(currentLevel, 2));
+    let reqXP = Math.floor(3.0 * Math.pow(currentLevel, 2)); // Increased from 1.8 for hard mode
     if (currentXP >= reqXP && gameState === 'PLAYING') {
         currentLevel++;
         showUpgradeScreen();
@@ -1688,20 +1711,20 @@ function spawnNextBoss() {
 
 function bossTakeDamage(target, amount = player.damage) {
     if (target.state === 'DYING' || target.health <= 0) return;
-    amount *= 0.5; // Player does 1/2 damage
+    amount *= 0.4; // Reduced player damage scaling for more challenge (from 0.5)
     target.health -= amount;
     target.hitResonance = BOSS_HIT_RESONANCE;
-    setShake(10, 0.2);
-    spawnParticles(target.x + target.width/2, target.y + target.height/2, target.color, 20);
+    setShake(5, 0.1);
+    spawnParticles(target.x + target.width/2, target.y + target.height/2, target.color, 10);
     
     // Spawn small XP orb from hit
-    if (Math.random() < 0.3) { // Reduced from 0.5
+    if (Math.random() < 0.2) { // Reduced drop rate for harder progression (from 0.3)
         xpOrbs.push({
             x: target.x + target.width / 2,
             y: target.y + target.height / 2,
             vx: (Math.random() - 0.5) * 400,
             vy: -Math.random() * 300 - 100,
-            value: 0.1, // Reduced from 0.5
+            value: 0.05, // Drastically reduced XP per hit for hard mode
             homingDelay: 0.5
         });
     }
@@ -1860,6 +1883,28 @@ function shoot(bonusCharge = 0) {
         }
         player.fireCooldown = PLAYER_FIRE_RATE;
         sfx.click();
+        return;
+    }
+
+    if (player.weaponType === 'WAND') {
+        const count = player.multishot || 1;
+        for (let i = 0; i < count; i++) {
+            const angle = Math.atan2(dy, dx) + (i - (count-1)/2) * 0.4;
+            player.bullets.push({
+                x: player.x + player.width/2,
+                y: player.y + player.height/2,
+                vx: Math.cos(angle) * 200, // Starts slow
+                vy: Math.sin(angle) * 200,
+                radius: (player.bulletSize || 8) * 1.2,
+                isWand: true,
+                life: (player.bulletLife || 3),
+                homingPower: player.wandHomingPower || 1.0,
+                color: '#ff00ff',
+                initialDelay: 0.4 // Delay before it starts homing
+            });
+        }
+        player.fireCooldown = PLAYER_FIRE_RATE * 1.2;
+        sfx.portal();
         return;
     }
     
@@ -2835,6 +2880,37 @@ function update(timestamp) {
             return true;
         }
 
+        if (p.isWand) {
+            p.life -= dt;
+            p.initialDelay -= dt;
+            if (p.initialDelay <= 0 && boss && boss.health > 0) {
+                const dx = (boss.x + boss.width/2) - p.x;
+                const dy = (boss.y + boss.height/2) - p.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                const targetVx = (dx/dist) * (player.wandArcaneSpeed || 500);
+                const targetVy = (dy/dist) * (player.wandArcaneSpeed || 500);
+                p.vx += (targetVx - p.vx) * dt * (p.homingPower || 1) * 8;
+                p.vy += (targetVy - p.vy) * dt * (p.homingPower || 1) * 8;
+            } else {
+                p.vx *= 0.95; // Drag while idle
+                p.vy *= 0.95;
+            }
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+
+            // Collision
+            if (boss && boss.health > 0 && boss.state !== 'DYING') {
+                const bdx = (boss.x + boss.width/2) - p.x;
+                const bdy = (boss.y + boss.height/2) - p.y;
+                if (Math.sqrt(bdx*bdx + bdy*bdy) < p.radius + boss.width/2) {
+                    bossTakeDamage(boss, player.damage * 0.8);
+                    spawnParticles(p.x, p.y, '#ff00ff', 10);
+                    return false; // Arcane orbs disappear on hit usually or pierce? Disappear for balance.
+                }
+            }
+            return p.life > 0;
+        }
+
         // Homing
         if (player.homing && boss && boss.health > 0) {
             const dx = (boss.x + boss.width/2) - p.x;
@@ -3643,8 +3719,27 @@ function draw() {
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(0, -p.radius);
-            ctx.lineTo(Math.cos(p.angle*2)*5, -p.radius-5);
+            ctx.lineTo(Math.cos(p.angle * 2) * 5, -p.radius - 5);
             ctx.stroke();
+            ctx.restore();
+        } else if (p.isWand) {
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, p.radius * 1.5);
+            grad.addColorStop(0, '#fff');
+            grad.addColorStop(0.4, '#ff00ff');
+            grad.addColorStop(1, 'rgba(255, 0, 255, 0)');
+            ctx.fillStyle = grad;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#ff00ff';
+            ctx.beginPath();
+            ctx.arc(0, 0, p.radius * 1.5, 0, Math.PI * 2);
+            ctx.fill();
+            // Core
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(0, 0, p.radius * 0.4, 0, Math.PI * 2);
+            ctx.fill();
             ctx.restore();
         } else if (p.isBoomerang) {
             ctx.save();
